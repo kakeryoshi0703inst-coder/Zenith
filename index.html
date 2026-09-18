@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Zenith Money - 次世代家計簿・資産管理</title>
+  
+  <!-- PWA Offline Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4338CA">
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  
+  <!-- Chart.js for High-performance Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+
+  <div id="app" class="app-shell">
+    
+    <!-- Top Header (Mobile Optimized) -->
+    <header class="top-header">
+      <div class="header-row-top">
+        <div class="logo-container">
+          <span class="material-symbols-rounded logo-icon">diamond</span>
+          <div class="logo-text">
+            <span class="brand-name">Zenith<span class="brand-accent">Money</span></span>
+            <span class="brand-tagline">スマート家計・資産</span>
+          </div>
+        </div>
+
+        <div class="header-quick-tools">
+          <button id="theme-toggle-btn" class="icon-btn" title="テーマ切り替え">
+            <span class="material-symbols-rounded">dark_mode</span>
+          </button>
+          <button id="settings-trigger-btn" class="icon-btn" title="設定">
+            <span class="material-symbols-rounded">settings</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="header-row-bottom">
+        <!-- Month Selector Pill with Calendar Picker Trigger -->
+        <div class="month-selector-pill" id="global-month-picker">
+          <button id="prev-month-btn" class="pill-arrow" title="前月"><span class="material-symbols-rounded">chevron_left</span></button>
+          <div class="pill-date-clickable" id="current-month-clickable" title="カレンダーから日付・年月を選択">
+            <span class="material-symbols-rounded month-cal-icon">calendar_month</span>
+            <span id="current-month-label" class="pill-date"></span>
+            <input type="month" id="header-month-picker-input" class="hidden-month-input" />
+          </div>
+          <button id="next-month-btn" class="pill-arrow" title="次月"><span class="material-symbols-rounded">chevron_right</span></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Views Container -->
+    <main class="main-workspace">
+      
+      <!-- ========================================== -->
+      <!-- VIEW 1: HOME DASHBOARD (tab-home)         -->
+      <!-- ========================================== -->
+      <section id="tab-home" class="view-page active">
+        
+        <!-- LEVEL 1: Zenith Balance Card (3-Second Grasp) -->
+        <div class="zenith-hero-card">
+          <div class="hero-top-row">
+            <div class="balance-block">
+              <span class="hero-label">今月の収支バランス</span>
+              <div class="hero-balance-val" id="home-net-balance">+¥42,800</div>
+              <div class="hero-sub-comparison positive" id="home-mom-diff">
+                <span class="material-symbols-rounded">trending_up</span>
+                <span>先月同日比 +¥8,400</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-metrics-grid">
+            <div class="metric-card clickable-card" id="card-total-assets" title="タップして総資産を手動設定">
+              <div class="metric-head">
+                <span class="material-symbols-rounded metric-icon assets">account_balance_wallet</span>
+                <span>総資産</span>
+                <span class="material-symbols-rounded asset-edit-icon" style="font-size:15px; margin-left:auto; color:var(--text-muted);">edit</span>
+              </div>
+              <div class="metric-value" id="home-total-assets">¥2,450,000</div>
+              <div class="metric-sub" id="home-net-assets">純資産: ¥2,250,000</div>
+            </div>
+
+            <div class="metric-card clickable-card" id="card-budget-status" title="タップして予算を手動設定">
+              <div class="metric-head">
+                <span class="material-symbols-rounded metric-icon budget">pie_chart</span>
+                <span>今月の残り予算</span>
+                <span class="material-symbols-rounded budget-edit-icon" style="font-size:15px; margin-left:auto; color:var(--text-muted);">edit</span>
+              </div>
+              <div class="metric-value" id="home-remaining-budget">¥72,000</div>
+              <div class="metric-sub" id="home-budget-progress-text">予算 ¥200,000 中 64% 使用</div>
+            </div>
+          </div>
+
+          <div class="budget-mini-gauge-track">
+            <div class="budget-mini-gauge-fill" id="home-budget-gauge-fill" style="width: 64%;"></div>
+          </div>
+        </div>
+
+        <!-- LEVEL 2: 10-Second Context Cards -->
+        <div class="context-cards-row">
+          <!-- Income vs Expense breakdown pill -->
+          <div class="flow-pill-card">
+            <div class="flow-item income">
+              <span class="flow-icon"><span class="material-symbols-rounded">arrow_upward</span></span>
+              <div>
+                <span class="flow-label">今月の収入</span>
+                <span class="flow-amount" id="home-total-income">¥320,000</span>
+              </div>
+            </div>
+            <div class="flow-divider"></div>
+            <div class="flow-item expense">
+              <span class="flow-icon"><span class="material-symbols-rounded">arrow_downward</span></span>
+              <div>
+                <span class="flow-label">今月の支出</span>
+                <span class="flow-amount" id="home-total-expense">¥277,200</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- End of Month Budget Pace Forecast Banner -->
+          <div class="forecast-banner" id="home-forecast-banner">
+            <div class="forecast-icon"><span class="material-symbols-rounded">bolt</span></div>
+            <div class="forecast-content">
+              <span class="forecast-title">予算着地予測</span>
+              <span class="forecast-desc" id="home-forecast-desc">
+                日均 ¥4,200ペース：月末予想 ¥187,500（予算内）
+              </span>
+            </div>
+          </div>
+
+
+        </div>
+
+        <!-- LEVEL 3: Deep Insights & Recent Activity -->
+        <div class="dashboard-grid-two">
+          
+          <!-- AI Insights Section -->
+          <div class="dashboard-panel ai-panel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <span class="material-symbols-rounded ai-sparkle">auto_awesome</span>
+                <h3>AIインサイト</h3>
+              </div>
+              <span class="panel-badge">根拠データ付</span>
+            </div>
+            <div class="ai-insights-list" id="home-ai-insights-container">
+              <!-- Dynamic AI Cards -->
+            </div>
+          </div>
+
+          <!-- Recent Transactions Preview Panel -->
+          <div class="dashboard-panel transactions-panel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <span class="material-symbols-rounded">history</span>
+                <h3>直近の明細</h3>
+              </div>
+              <button class="text-link-btn" id="home-view-all-tx-btn">すべて見る ›</button>
+            </div>
+            <div class="transaction-items-list" id="home-recent-tx-list">
+              <!-- Dynamic Recent Items -->
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 2: TRANSACTIONS & CALENDAR (tab-tx)   -->
+      <!-- ========================================== -->
+      <section id="tab-transactions" class="view-page">
+        
+        <div class="tx-header-bar">
+          <div class="view-mode-tabs">
+            <button id="tx-view-list-btn" class="sub-tab-btn active"><span class="material-symbols-rounded">format_list_bulleted</span> リスト</button>
+            <button id="tx-view-cal-btn" class="sub-tab-btn"><span class="material-symbols-rounded">calendar_month</span> カレンダー</button>
+          </div>
+        </div>
+
+        <!-- Search & Filter Controls -->
+        <div class="search-filter-panel">
+          <div class="search-input-wrapper">
+            <span class="material-symbols-rounded search-icon">search</span>
+            <input type="text" id="tx-search-input" placeholder="店舗名、メモ、タグ、金額で検索..." />
+            <button id="tx-clear-search-btn" class="clear-btn hidden"><span class="material-symbols-rounded">close</span></button>
+          </div>
+
+          <div class="filter-chips-scroll">
+            <select id="filter-category-select" class="filter-select-chip">
+              <option value="ALL">全てのカテゴリ</option>
+            </select>
+
+            <select id="filter-type-select" class="filter-select-chip">
+              <option value="ALL">全ての種別</option>
+              <option value="expense">支出のみ</option>
+              <option value="income">収入のみ</option>
+              <option value="transfer">振替（口座移動）のみ</option>
+            </select>
+
+            <select id="filter-account-select" class="filter-select-chip">
+              <option value="ALL">全ての口座</option>
+            </select>
+
+            <button id="filter-reset-btn" class="chip-action-btn" title="リセット"><span class="material-symbols-rounded">restart_alt</span></button>
+          </div>
+        </div>
+
+        <!-- List View Container -->
+        <div id="tx-list-container" class="tx-container">
+          <div class="transaction-grouped-list" id="tx-full-list">
+            <!-- Dynamic Transaction Groups -->
+          </div>
+        </div>
+
+        <!-- Calendar View Container -->
+        <div id="tx-calendar-container" class="tx-container hidden">
+          <div class="calendar-card-box">
+            <div class="calendar-header-nav">
+              <button id="cal-prev-btn" class="cal-nav-btn"><span class="material-symbols-rounded">chevron_left</span></button>
+              <h3 id="cal-month-title">2026年 8月</h3>
+              <button id="cal-next-btn" class="cal-nav-btn"><span class="material-symbols-rounded">chevron_right</span></button>
+            </div>
+            
+            <div class="calendar-grid-header">
+              <span class="sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span>
+            </div>
+
+            <div class="calendar-grid-body" id="calendar-days-matrix">
+              <!-- Dynamic Calendar Cells -->
+            </div>
+          </div>
+
+          <div class="calendar-day-details" id="cal-selected-day-panel">
+            <div class="day-details-head">
+              <h4 id="cal-selected-date-label">選択日の明細</h4>
+              <span id="cal-selected-day-total">合計: ¥0</span>
+            </div>
+            <div class="transaction-items-list" id="cal-selected-day-list">
+              <div class="empty-placeholder">カレンダーの日付を選択すると、その日の取引明細が表示されます</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 3: ANALYTICS & BUDGET (tab-analytics) -->
+      <!-- ========================================== -->
+      <section id="tab-analytics" class="view-page">
+        
+        <div class="analytics-header">
+          <h2>分析</h2>
+          <div class="chart-tab-group">
+            <button id="btn-chart-pie" class="sub-tab-btn active">支出内訳</button>
+            <button id="btn-chart-bar" class="sub-tab-btn">月別推移</button>
+            <button id="btn-chart-fixed" class="sub-tab-btn">固定費/変動費</button>
+            <button id="btn-tab-budget" class="sub-tab-btn">予算管理</button>
+          </div>
+        </div>
+
+        <!-- Analytics Sub-View 1: Donut Chart & Category Breakdown -->
+        <div id="analytics-pie-view" class="analytics-section active">
+          <div class="chart-card-box">
+            <div class="chart-title-row">
+              <h3>カテゴリ別支出内訳</h3>
+              <span class="chart-total-text" id="analytics-pie-total">総支出: ¥277,200</span>
+            </div>
+            <div class="chart-canvas-wrapper donut-canvas-container">
+              <canvas id="categoryDonutChart"></canvas>
+            </div>
+            <div id="category-donut-legend" class="donut-custom-legend">
+              <!-- Dynamic Category Breakdown Legend -->
+            </div>
+          </div>
+
+          <!-- MoM Comparison List -->
+          <div class="panel-box">
+            <div class="panel-title-row">
+              <h3>推移</h3>
+            </div>
+            <div class="mom-list" id="mom-category-list">
+              <!-- Dynamic MoM List Rows -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Analytics Sub-View 2: Monthly Bar Chart -->
+        <div id="analytics-bar-view" class="analytics-section hidden">
+          <div class="chart-card-box">
+            <h3>過去6ヶ月の収支推移</h3>
+            <div class="chart-canvas-wrapper bar-wrapper">
+              <canvas id="monthlyBarChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analytics Sub-View 3: Fixed vs Variable -->
+        <div id="analytics-fixed-view" class="analytics-section hidden">
+          <div class="fixed-variable-grid">
+            <div class="panel-box fixed-box">
+              <div class="panel-title-row">
+                <h3><span class="material-symbols-rounded">lock</span> 固定費 (住宅・通信・保険・サブスク)</h3>
+                <span class="fixed-total-val" id="fixed-expense-total">¥105,000</span>
+              </div>
+              <div class="tx-mini-list" id="fixed-expense-list">
+                <!-- Dynamic Fixed Items -->
+              </div>
+            </div>
+
+            <div class="panel-box variable-box">
+              <div class="panel-title-row">
+                <h3><span class="material-symbols-rounded">shopping_cart</span> 変動費 (食費・娯楽・交通・日用品)</h3>
+                <span class="variable-total-val" id="variable-expense-total">¥172,200</span>
+              </div>
+              <div class="tx-mini-list" id="variable-expense-list">
+                <!-- Dynamic Variable Items -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analytics Sub-View 4: Budget Management & Forecaster -->
+        <div id="analytics-budget-view" class="analytics-section hidden">
+          <div class="panel-box">
+            <div class="panel-title-row">
+              <h3>総予算</h3>
+              <button id="open-edit-budget-btn" class="primary-btn-sm"><span class="material-symbols-rounded">edit</span> 予算設定</button>
+            </div>
+            
+            <div class="budget-overall-card">
+              <div class="overall-head">
+                <span>全体予算使用率</span>
+                <span class="overall-percent" id="budget-overall-percent">64%</span>
+              </div>
+              <div class="progress-bar-bg lg">
+                <div class="progress-bar-fill lg" id="budget-overall-fill" style="width: 64%;"></div>
+              </div>
+              <div class="overall-foot">
+                <span id="budget-overall-used">使用額: ¥177,200</span>
+                <span id="budget-overall-limit">予算上限: ¥200,000</span>
+                <span id="budget-overall-rem" class="rem-highlight">残り: ¥22,800</span>
+              </div>
+            </div>
+
+            <div class="category-budgets-list" id="category-budgets-container">
+              <!-- Dynamic Category Budget Progress Rows -->
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 4: ASSETS & SAVINGS (tab-assets)      -->
+      <!-- ========================================== -->
+      <section id="tab-assets" class="view-page">
+        
+        <div class="assets-overview-hero">
+          <div class="assets-main-stat">
+            <span class="stat-label">総資産 (Total Assets)</span>
+            <div class="stat-val" id="assets-total-val">¥2,450,000</div>
+          </div>
+
+          <div class="assets-sub-stats">
+            <div class="sub-stat">
+              <span class="sub-label">負債 (Liabilities)</span>
+              <span class="sub-val danger" id="assets-liability-val">¥200,000</span>
+            </div>
+            <div class="sub-stat">
+              <span class="sub-label">純資産 (Net Worth)</span>
+              <span class="sub-val success" id="assets-net-val">¥2,250,000</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Asset Trend Line Chart -->
+        <div class="chart-card-box">
+          <div class="chart-title-row">
+            <h3>資産推移グラフ</h3>
+            <div class="time-range-chips">
+              <button class="range-chip active" data-range="1M">1ヶ月</button>
+              <button class="range-chip" data-range="6M">6ヶ月</button>
+              <button class="range-chip" data-range="1Y">1年</button>
+            </div>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="assetTrendChart"></canvas>
+          </div>
+        </div>
+
+
+
+        <!-- Savings Goals Section -->
+        <div class="panel-box">
+          <div class="panel-title-row">
+            <h4 style="font-size:14px; font-weight:700;">貯金目標</h4>
+            <button id="create-goal-btn" class="icon-btn" title="目標を作成"><span class="material-symbols-rounded">add</span></button>
+          </div>
+          <div class="goals-cards-list" id="savings-goals-container">
+            <!-- Dynamic Savings Goal Cards -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 5: MONTHLY REPORT (tab-report)        -->
+      <!-- ========================================== -->
+      <section id="tab-report" class="view-page">
+        <div class="report-header-banner">
+          <span class="material-symbols-rounded banner-icon">workspace_premium</span>
+          <h2>2026年 8月度 月次家計レポート</h2>
+          <p>今月のお金の流れと達成度を自動まとめたエグゼクティブサマリーです</p>
+        </div>
+
+        <div class="report-grid">
+          <div class="report-card">
+            <h3><span class="material-symbols-rounded">fact_check</span> 収支総括</h3>
+            <div class="report-numbers-list">
+              <div class="report-num-row"><span>総収入:</span><strong class="success" id="rep-income">¥320,000</strong></div>
+              <div class="report-num-row"><span>総支出:</span><strong class="danger" id="rep-expense">¥277,200</strong></div>
+              <div class="report-num-row"><span>今月の貯蓄額:</span><strong class="accent" id="rep-savings">¥42,800</strong></div>
+              <div class="report-num-row"><span>貯蓄率:</span><strong class="accent" id="rep-savings-rate">13.4%</strong></div>
+            </div>
+          </div>
+
+          <div class="report-card">
+            <h3><span class="material-symbols-rounded">leaderboard</span> 支出TOP 3 カテゴリ</h3>
+            <div class="top-list" id="rep-top-categories">
+              <!-- Dynamic Top 3 -->
+            </div>
+          </div>
+
+          <div class="report-card ai-report-card">
+            <h3><span class="material-symbols-rounded">auto_awesome</span> AIアドバイザー評釈</h3>
+            <p id="rep-ai-comment">
+              今月は全体予算 ¥200,000 に対し支出 ¥177,200 (88.6%) で無事に予算達成となりました！食費の節約が貢献しています。来月もこの調子で固定費の維持を心がけましょう。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VIEW 6: SETTINGS (tab-settings)            -->
+      <!-- ========================================== -->
+      <section id="tab-settings" class="view-page">
+        
+        <div class="settings-panel-box">
+          <h3><span class="material-symbols-rounded">tune</span> アプリ体験・表示設定</h3>
+
+          <div class="setting-row">
+            <div>
+              <strong>ダークモード / ライトモード</strong>
+              <p>視認性を極限まで高めた独自テーマ設計</p>
+            </div>
+            <select id="setting-theme-select" class="form-select-sm">
+              <option value="dark">ダークガラス (Dark Mode)</option>
+              <option value="light">ライトミニマル (Light Mode)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-panel-box">
+          <h3><span class="material-symbols-rounded">category</span> カテゴリ＆タグ設定</h3>
+          <div class="setting-row">
+            <div>
+              <strong>カテゴリ一覧の編集</strong>
+              <p>アイコン・カラー・名称の変更や新規カテゴリの追加</p>
+            </div>
+            <button id="manage-categories-btn" class="secondary-btn-sm">カテゴリ設定を開く</button>
+          </div>
+        </div>
+
+        <div class="settings-panel-box">
+          <h3><span class="material-symbols-rounded">database</span> データ管理・バックアップ</h3>
+          
+          <div class="setting-row">
+            <div>
+              <strong>CSV形式でエクスポート</strong>
+              <p>すべての取引データをCSVファイルとしてダウンロードします</p>
+            </div>
+            <button id="export-csv-btn" class="secondary-btn-sm"><span class="material-symbols-rounded">download</span> CSV出力</button>
+          </div>
+
+          <div class="setting-row">
+            <div>
+              <strong>サンプルデータの読み込み</strong>
+              <p>2ヶ月分（約50件）のリアリティあるテスト用家計簿データをセットアップします</p>
+            </div>
+            <button id="load-sample-data-btn" class="secondary-btn-sm primary-tint"><span class="material-symbols-rounded">database</span> サンプルデータセット</button>
+          </div>
+
+          <div class="setting-row danger-zone">
+            <div>
+              <strong>全データの初期化</strong>
+              <p>ローカルに保存されているすべての家計簿・口座データを削除します</p>
+            </div>
+            <button id="reset-all-data-btn" class="danger-btn-sm"><span class="material-symbols-rounded">delete_forever</span> データ初期化</button>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar (SP / Tablet Responsive) -->
+    <nav class="bottom-nav-bar">
+      <button class="nav-btn active" data-tab="tab-home">
+        <span class="material-symbols-rounded">space_dashboard</span>
+        <span class="nav-label">ホーム</span>
+      </button>
+
+      <button class="nav-btn" data-tab="tab-transactions">
+        <span class="material-symbols-rounded">receipt_long</span>
+        <span class="nav-label">収支</span>
+      </button>
+
+      <!-- Center Action Button (Fast Input Trigger) -->
+      <div class="center-action-wrapper">
+        <button id="fab-input-btn" class="center-fab-btn" title="支出・収入を記録">
+          <span class="material-symbols-rounded">add</span>
+        </button>
+      </div>
+
+      <button class="nav-btn" data-tab="tab-analytics">
+        <span class="material-symbols-rounded">monitoring</span>
+        <span class="nav-label">分析</span>
+      </button>
+
+      <button class="nav-btn" data-tab="tab-assets">
+        <span class="material-symbols-rounded">account_balance_wallet</span>
+        <span class="nav-label">資産</span>
+      </button>
+    </nav>
+
+    <!-- ========================================== -->
+    <!-- MODAL 1: FAST INPUT DRAWER / MODAL        -->
+    <!-- ========================================== -->
+    <div id="input-modal-overlay" class="modal-overlay hidden">
+      <div class="input-modal-card">
+        
+        <div class="input-modal-header">
+          <!-- Input Mode Tabs -->
+          <div class="input-mode-tabs">
+            <button id="input-tab-manual" class="input-tab-btn active"><span class="material-symbols-rounded">calculate</span> 手入力</button>
+            <button id="input-tab-receipt" class="input-tab-btn"><span class="material-symbols-rounded">photo_camera</span> レシートOCR</button>
+            <button id="input-tab-ai" class="input-tab-btn"><span class="material-symbols-rounded">auto_awesome</span> AI・音声</button>
+          </div>
+          <button id="close-input-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+        </div>
+
+        <div class="input-modal-body">
+          
+          <!-- TAB 1: MANUAL KEYPAD INPUT -->
+          <div id="input-view-manual" class="input-tab-page active">
+            
+            <!-- Type Selector (Expense / Income / Transfer) -->
+            <div class="transaction-type-selector">
+              <button class="type-btn active expense" data-type="expense">支出</button>
+              <button class="type-btn income" data-type="income">収入</button>
+              <button class="type-btn transfer" data-type="transfer">振替 (口座移動)</button>
+            </div>
+
+            <!-- Frequently Used Categories Row -->
+            <div class="quick-categories-bar" id="quick-categories-bar">
+              <!-- Dynamic Quick Category Chips -->
+            </div>
+
+            <!-- Amount Display & Category Badge Row -->
+            <div class="amount-display-row">
+              <div class="selected-category-chip" id="current-selected-category-chip">
+                <span class="material-symbols-rounded" id="selected-cat-icon">restaurant</span>
+                <span id="selected-cat-name">食費</span>
+              </div>
+              <div class="amount-val-wrapper">
+                <span class="currency-sign">¥</span>
+                <span class="amount-digits" id="keypad-display-amount">0</span>
+              </div>
+            </div>
+
+            <!-- Touch Numpad Grid -->
+            <div class="keypad-grid">
+              <button class="keypad-btn num" data-val="7">7</button>
+              <button class="keypad-btn num" data-val="8">8</button>
+              <button class="keypad-btn num" data-val="9">9</button>
+              <button class="keypad-btn action del" id="btn-num-del"><span class="material-symbols-rounded">backspace</span></button>
+              
+              <button class="keypad-btn num" data-val="4">4</button>
+              <button class="keypad-btn num" data-val="5">5</button>
+              <button class="keypad-btn num" data-val="6">6</button>
+              <button class="keypad-btn action clear" id="btn-num-clear">C</button>
+
+              <button class="keypad-btn num" data-val="1">1</button>
+              <button class="keypad-btn num" data-val="2">2</button>
+              <button class="keypad-btn num" data-val="3">3</button>
+              
+              <!-- Direct Submit Keypad Cell -->
+              <button class="keypad-btn submit-cell" id="btn-fast-submit">
+                <span class="material-symbols-rounded">check_circle</span>
+                <span>登録</span>
+              </button>
+
+              <button class="keypad-btn num zero" data-val="0">0</button>
+              <button class="keypad-btn num" data-val="00">00</button>
+            </div>
+
+            <!-- Detailed Form Accordion Trigger -->
+            <details class="details-accordion">
+              <summary class="details-summary">
+                <span><span class="material-symbols-rounded">tune</span> 詳細オプション (日付・口座・メモ・タグ)</span>
+              </summary>
+              <div class="details-body">
+                <div class="form-grid-two">
+                  <div class="form-field">
+                    <label>日付</label>
+                    <input type="date" id="input-date-val" />
+                  </div>
+                  <div class="form-field">
+                    <label>出金元口座 / 支払方法</label>
+                    <select id="input-account-val" class="form-select"></select>
+                  </div>
+                  
+                  <div class="form-field transfer-only-field hidden" id="transfer-destination-field">
+                    <label>入金先口座 (振替先)</label>
+                    <select id="input-to-account-val" class="form-select"></select>
+                  </div>
+                  
+                  <div class="form-field">
+                    <label>メモ</label>
+                    <input type="text" id="input-memo-val" placeholder="メモを入力..." />
+                  </div>
+                </div>
+
+                <div class="form-field" style="margin-top: 10px;">
+                  <label>タグ (カンマ区切り)</label>
+                  <input type="text" id="input-tags-val" placeholder="#外食, #仕事 等" />
+                </div>
+              </div>
+            </details>
+
+          </div>
+
+          <!-- TAB 2: RECEIPT OCR SCANNER -->
+          <div id="input-view-receipt" class="input-tab-page hidden">
+            <div class="receipt-dropzone" id="receipt-dropzone">
+              <span class="material-symbols-rounded dropzone-icon">add_a_photo</span>
+              <h4>レシートを撮影または画像をドロップ</h4>
+              <p>AI OCRが日付・金額・品目を自動解析します</p>
+              <input type="file" id="receipt-file-input" accept="image/*" style="display:none;" />
+              <button id="select-receipt-btn" class="primary-btn-sm">ファイルを選択</button>
+            </div>
+
+            <!-- Scanning Animation Box -->
+            <div id="receipt-scanning-box" class="scanning-box hidden">
+              <div class="scanner-line"></div>
+              <p>レシートを高速解析中...</p>
+            </div>
+
+            <!-- OCR Result Review & Edit -->
+            <div id="receipt-ocr-result" class="ocr-result-card hidden">
+              <div class="ocr-badge-row">
+                <span class="ocr-confidence-tag high" id="ocr-confidence-badge">信頼度: 98% (高精度)</span>
+                <button id="re-upload-receipt-btn" class="text-link-btn">再撮影</button>
+              </div>
+
+              <div class="form-grid-two">
+                <div class="form-field">
+                  <label>日付</label>
+                  <input type="date" id="ocr-date-input" />
+                </div>
+                <div class="form-field">
+                  <label>合計金額</label>
+                  <input type="number" id="ocr-amount-input" value="3280" />
+                </div>
+                <div class="form-field">
+                  <label>推奨カテゴリ</label>
+                  <select id="ocr-category-select" class="form-select"></select>
+                </div>
+              </div>
+
+              <button id="save-ocr-btn" class="primary-btn-full" style="margin-top: 16px;">
+                <span class="material-symbols-rounded">check</span> レシート内容で登録
+              </button>
+            </div>
+          </div>
+
+          <!-- TAB 3: AI & VOICE INPUT -->
+          <div id="input-view-ai" class="input-tab-page hidden">
+            <div class="ai-input-box">
+              <div class="ai-input-header">
+                <span class="material-symbols-rounded ai-sparkle">auto_awesome</span>
+                <h4>AI音声・テキスト入力</h4>
+              </div>
+
+              <div class="speech-mic-row">
+                <button id="voice-record-btn" class="mic-pulse-btn" title="音声で喋って入力">
+                  <span class="material-symbols-rounded mic-icon">mic</span>
+                </button>
+                <span id="voice-status-text" class="voice-status">マイクを押すか下に文章を入力</span>
+              </div>
+
+              <textarea id="ai-text-input" class="ai-textarea" rows="3" placeholder="例: 「昨日ランチで450円」「8月10日に書籍5000円」「今日の昼にラーメン1200円」"></textarea>
+
+              <button id="ai-parse-btn" class="primary-btn-full">
+                <span class="material-symbols-rounded">psychology</span> AIで解析・構造化
+              </button>
+
+              <!-- Parsed Result Card -->
+              <div id="ai-parsed-card" class="ai-parsed-result hidden">
+                <h5><span class="material-symbols-rounded">done_all</span> 解析結果の確認</h5>
+                <div class="parsed-grid">
+                  <div><span>日付:</span> <strong id="parsed-date">2026/08/18</strong></div>
+                  <div><span>金額:</span> <strong id="parsed-amount">¥450</strong></div>
+                  <div><span>カテゴリ:</span> <strong id="parsed-category">食費</strong></div>
+                </div>
+
+                <div class="parsed-actions">
+                  <button id="save-ai-parsed-btn" class="primary-btn-full">
+                    <span class="material-symbols-rounded">check</span> この内容で確定登録
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 2: AI INSIGHT EVIDENCE MODAL        -->
+    <!-- ========================================== -->
+    <div id="ai-evidence-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="material-symbols-rounded ai-sparkle">auto_awesome</span>
+            <h3 id="ai-modal-title">AI分析根拠詳細</h3>
+          </div>
+          <button id="close-ai-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+        </div>
+
+        <div class="modal-body">
+          <p id="ai-modal-message" class="ai-evidence-message">
+            先月と比べて外食費が4,200円増えています。今月の支出増加の主な要因になっています。
+          </p>
+
+          <div class="evidence-table-box">
+            <h4><span class="material-symbols-rounded">analytics</span> 比較根拠データ</h4>
+            <table class="evidence-table">
+              <thead>
+                <tr>
+                  <th>項目</th>
+                  <th>先月実績</th>
+                  <th>今月実績</th>
+                  <th>差額 (MoM)</th>
+                </tr>
+              </thead>
+              <tbody id="ai-evidence-tbody">
+                <!-- Dynamic Evidence Row -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="ai-disclaimer">
+            ※ Zenith AI分析は決定データに基づく客観的な実績比較であり、断定的な投資・金融商品の推奨は一切行いません。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 3: SAVINGS GOAL CREATION MODAL      -->
+    <!-- ========================================== -->
+    <div id="goal-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>新規貯金目標の作成</h3>
+          <button id="close-goal-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label>目標タイトル</label>
+            <input type="text" id="goal-title-input" placeholder="例: ハワイ旅行、緊急予備資金など" />
+          </div>
+          <div class="form-field">
+            <label>目標金額 (円)</label>
+            <input type="number" id="goal-target-input" placeholder="1000000" />
+          </div>
+          <div class="form-field">
+            <label>現在の貯蓄額 (円)</label>
+            <input type="number" id="goal-current-input" value="0" />
+          </div>
+          <div class="form-field">
+            <label>達成目標日</label>
+            <input type="date" id="goal-date-input" />
+          </div>
+          <button id="save-goal-btn" class="primary-btn-full" style="margin-top: 16px;">
+            <span class="material-symbols-rounded">save</span> 目標を保存
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 4: BUDGET EDIT MODAL                 -->
+    <!-- ========================================== -->
+    <div id="budget-edit-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group" style="display:flex; align-items:center; gap:8px;">
+            <span class="material-symbols-rounded" style="color:var(--accent-primary);">tune</span>
+            <h3>予算設定</h3>
+          </div>
+          <button id="close-budget-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
+          <!-- Current Expense Status -->
+          <div style="background:var(--surface-2); padding:10px 14px; border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center; font-size:13px;">
+            <span style="color:var(--text-secondary);">今月の支出合計</span>
+            <span id="budget-current-expense-info" style="font-weight:700; color:var(--color-expense);">¥0</span>
+          </div>
+
+          <!-- Remaining Budget Direct Input -->
+          <div class="form-field">
+            <label style="display:flex; align-items:center; justify-content:space-between;">
+              <span>今月の希望の残り予算 (円)</span>
+              <span style="font-size:11px; color:var(--accent-primary); font-weight:600;">ホーム表示額</span>
+            </label>
+            <input type="number" id="budget-remaining-input" placeholder="例: 70000" style="font-size:16px; font-weight:700;" />
+          </div>
+
+          <!-- Total Budget Input -->
+          <div class="form-field">
+            <label>今月の全体総予算 (円)</label>
+            <input type="number" id="budget-overall-input" placeholder="例: 200000" />
+            <span style="font-size:11px; color:var(--text-muted); margin-top:2px;">※ 残り予算または総予算のどちらを入力しても自動連動計算されます</span>
+          </div>
+
+          <div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-top:4px;">カテゴリ別予算 (任意)</div>
+          <div id="budget-categories-form-list" style="display:flex; flex-direction:column; gap:10px; max-height:220px; overflow-y:auto; padding-right:4px;">
+            <!-- Dynamic Category Budget Input Fields -->
+          </div>
+          <button id="save-budget-settings-btn" class="primary-btn-full" style="margin-top: 6px;">
+            <span class="material-symbols-rounded">save</span> 予算を保存
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 5: MONTH / CALENDAR PICKER MODAL     -->
+    <!-- ========================================== -->
+    <div id="month-calendar-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group" style="display:flex; align-items:center; gap:8px;">
+            <span class="material-symbols-rounded" style="color:var(--accent-primary);">calendar_month</span>
+            <h3>年月・カレンダー選択</h3>
+          </div>
+          <button id="close-month-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+          <!-- Year Selector Row -->
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:10px 16px; border-radius:var(--radius-md);">
+            <button id="cal-modal-prev-year-btn" class="pill-arrow" title="前年"><span class="material-symbols-rounded">chevron_left</span></button>
+            <span id="cal-modal-year-label" style="font-size:16px; font-weight:800; color:var(--text-primary);">2026年</span>
+            <button id="cal-modal-next-year-btn" class="pill-arrow" title="次年"><span class="material-symbols-rounded">chevron_right</span></button>
+          </div>
+
+          <!-- 12 Months Grid -->
+          <div id="cal-modal-months-grid" class="months-grid">
+            <!-- 1月〜12月 buttons -->
+          </div>
+
+          <!-- Quick Jump to Current Month -->
+          <button id="cal-modal-today-btn" class="secondary-btn-sm" style="width:100%; padding:12px; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
+            <span class="material-symbols-rounded" style="font-size:18px; color:var(--accent-primary);">today</span> 今月（当月）へジャンプ
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 6: ASSET EDIT MODAL                  -->
+    <!-- ========================================== -->
+    <div id="asset-edit-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group" style="display:flex; align-items:center; gap:8px;">
+            <span class="material-symbols-rounded" style="color:var(--accent-primary);">account_balance_wallet</span>
+            <h3>総資産の設定</h3>
+          </div>
+          <button id="close-asset-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+          <div class="form-field">
+            <label>現在の総資産額 (円)</label>
+            <input type="number" id="asset-total-input" placeholder="例: 2500000" style="font-size:16px; font-weight:700;" />
+            <span style="font-size:11px; color:var(--text-muted); margin-top:2px;">※ 銀行口座・現金・有価証券などの合算額を設定できます</span>
+          </div>
+
+          <div class="form-field">
+            <label>うち負債・クレジットカード利用残高 (円・任意)</label>
+            <input type="number" id="asset-liability-input" placeholder="例: 0" />
+            <span style="font-size:11px; color:var(--text-muted); margin-top:2px;">※ 純資産（総資産 - 負債）の計算に使用されます</span>
+          </div>
+
+          <div style="background:var(--surface-2); padding:12px 14px; border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center; font-size:13px;">
+            <span style="color:var(--text-secondary);">計算される純資産</span>
+            <span id="asset-modal-net-preview" style="font-weight:700; color:var(--text-primary); font-size:15px;">¥0</span>
+          </div>
+
+          <button id="save-asset-settings-btn" class="primary-btn-full" style="margin-top: 6px;">
+            <span class="material-symbols-rounded">save</span> 総資産を保存
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TOAST NOTIFICATION SYSTEM                  -->
+    <!-- ========================================== -->
+    <div id="toast-container" class="toast-container"></div>
+
+  </div>
+
+  <!-- Main JavaScript App Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
