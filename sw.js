@@ -2,13 +2,15 @@
    Zenith Money - Service Worker (Network First with Offline Fallback)
    ==================================================== */
 
-const CACHE_NAME = 'zenith-money-v11';
+const CACHE_NAME = 'zenith-money-v12';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
-  './manifest.json'
+  './manifest.json',
+  './icon.svg',
+  './icon-app.jpg'
 ];
 
 // Install Event - Pre-cache essential app shell assets

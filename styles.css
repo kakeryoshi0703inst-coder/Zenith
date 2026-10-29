@@ -1839,6 +1839,19 @@ body.light-theme .budget-mini-gauge-track {
   to { transform: translateY(80px); }
 }
 
+.ocr-trigger-btn-group button {
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ocr-trigger-btn-group button:active {
+  transform: scale(0.96);
+}
+
+#ocr-preview-container img {
+  box-shadow: var(--shadow-sm);
+  background-color: #000;
+}
+
 .details-accordion {
   width: 100%;
   background: var(--surface-1);
