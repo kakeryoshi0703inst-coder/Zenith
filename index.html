@@ -11,11 +11,11 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <meta name="theme-color" content="#12151E">
   
-  <!-- Fonts & Icons -->
+  <!-- Fonts & Icons (Minimalist Line Icons / 線文字) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   
   <!-- Chart.js for High-performance Charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -192,6 +192,9 @@
             <button id="tx-view-list-btn" class="sub-tab-btn active"><span class="material-symbols-rounded">format_list_bulleted</span> リスト</button>
             <button id="tx-view-cal-btn" class="sub-tab-btn"><span class="material-symbols-rounded">calendar_month</span> カレンダー</button>
           </div>
+          <button type="button" id="open-csv-import-btn" class="secondary-btn-sm" title="クレジットカード明細CSVを取り込み">
+            <span class="material-symbols-rounded">credit_card</span> クレカCSV取込
+          </button>
         </div>
 
         <!-- Search & Filter Controls -->
@@ -374,17 +377,17 @@
         
         <div class="assets-overview-hero">
           <div class="assets-main-stat">
-            <span class="stat-label">総資産 (Total Assets)</span>
+            <span class="stat-label">総資産</span>
             <div class="stat-val" id="assets-total-val">¥2,450,000</div>
           </div>
 
           <div class="assets-sub-stats">
             <div class="sub-stat">
-              <span class="sub-label">負債 (Liabilities)</span>
+              <span class="sub-label">負債</span>
               <span class="sub-val danger" id="assets-liability-val">¥200,000</span>
             </div>
             <div class="sub-stat">
-              <span class="sub-label">純資産 (Net Worth)</span>
+              <span class="sub-label">純資産</span>
               <span class="sub-val success" id="assets-net-val">¥2,250,000</span>
             </div>
           </div>
@@ -440,7 +443,7 @@
           </div>
 
           <div class="report-card">
-            <h3><span class="material-symbols-rounded">leaderboard</span> 支出TOP 3 カテゴリ</h3>
+            <h3><span class="material-symbols-rounded">leaderboard</span> 支出上位3カテゴリ</h3>
             <div class="top-list" id="rep-top-categories">
               <!-- Dynamic Top 3 -->
             </div>
@@ -469,8 +472,8 @@
               <p>視認性を極限まで高めた独自テーマ設計</p>
             </div>
             <select id="setting-theme-select" class="form-select-sm">
-              <option value="dark">ダークガラス (Dark Mode)</option>
-              <option value="light">ライトミニマル (Light Mode)</option>
+              <option value="dark">ダークモード (Dark)</option>
+              <option value="light">ライトモード (Light)</option>
             </select>
           </div>
         </div>
@@ -489,6 +492,14 @@
         <div class="settings-panel-box">
           <h3><span class="material-symbols-rounded">database</span> データ管理・バックアップ</h3>
           
+          <div class="setting-row">
+            <div>
+              <strong>クレジットカード明細 (CSV) の取込</strong>
+              <p>カード会社（楽天・三井住友・JCB等）の明細CSVを読み込み、自動カテゴリ分類して一括保存します</p>
+            </div>
+            <button id="settings-csv-import-btn" class="secondary-btn-sm primary-tint"><span class="material-symbols-rounded">credit_card</span> 明細CSV取込</button>
+          </div>
+
           <div class="setting-row">
             <div>
               <strong>CSV形式でエクスポート</strong>
@@ -569,67 +580,75 @@
           <!-- TAB 1: MANUAL KEYPAD INPUT -->
           <div id="input-view-manual" class="input-tab-page active">
             
-            <!-- Type Selector (Expense / Income / Transfer) -->
+            <!-- 1. Type Selector (Expense / Income / Transfer) -->
             <div class="transaction-type-selector">
-              <button class="type-btn active expense" data-type="expense">支出</button>
-              <button class="type-btn income" data-type="income">収入</button>
-              <button class="type-btn transfer" data-type="transfer">振替 (口座移動)</button>
+              <button type="button" class="type-btn active expense" data-type="expense">支出</button>
+              <button type="button" class="type-btn income" data-type="income">収入</button>
+              <button type="button" class="type-btn transfer" data-type="transfer">振替(口座移動)</button>
             </div>
 
-            <!-- Frequently Used Categories Row -->
-            <div class="quick-categories-bar" id="quick-categories-bar">
-              <!-- Dynamic Quick Category Chips -->
+            <!-- 2. Date Bar (Full Width) -->
+            <div class="date-selector-bar" id="date-selector-wrapper">
+              <label for="input-date-val" class="date-bar-inner">
+                <span class="material-symbols-rounded date-icon">calendar_today</span>
+                <span id="display-date-label" class="date-display-text">2026年 11月 9日</span>
+                <span class="material-symbols-rounded date-arrow">edit_calendar</span>
+                <input type="date" id="input-date-val" class="date-bar-input" />
+              </label>
             </div>
 
-            <!-- Amount Display & Category Badge Row -->
-            <div class="amount-display-row">
-              <div class="selected-category-chip" id="current-selected-category-chip">
-                <span class="material-symbols-rounded" id="selected-cat-icon">restaurant</span>
-                <span id="selected-cat-name">食費</span>
+            <!-- 3. Two-Column Row: [ジャンル] [金額入力欄] -->
+            <div class="input-two-col-row">
+              <!-- ジャンル -->
+              <div class="form-block genre-block" id="genre-select-trigger" title="ジャンルを変更">
+                <span class="block-label">ジャンル</span>
+                <div class="genre-current-val">
+                  <span class="material-symbols-rounded" id="selected-cat-icon">restaurant</span>
+                  <span id="selected-cat-name" class="genre-name-text">食費</span>
+                  <span class="material-symbols-rounded genre-caret">arrow_drop_down</span>
+                </div>
               </div>
-              <div class="amount-val-wrapper">
-                <span class="currency-sign">¥</span>
-                <span class="amount-digits" id="keypad-display-amount">0</span>
+
+              <!-- 金額入力欄 -->
+              <div class="form-block amount-block" id="amount-box-wrapper">
+                <span class="block-label">金額入力欄</span>
+                <div class="amount-field-inner">
+                  <span class="amount-currency">¥</span>
+                  <input type="text" inputmode="numeric" id="input-amount-val" class="amount-manual-input" placeholder="0" value="0" />
+                </div>
               </div>
             </div>
 
-            <!-- Touch Numpad Grid -->
-            <div class="keypad-grid">
-              <button class="keypad-btn num" data-val="7">7</button>
-              <button class="keypad-btn num" data-val="8">8</button>
-              <button class="keypad-btn num" data-val="9">9</button>
-              <button class="keypad-btn action del" id="btn-num-del"><span class="material-symbols-rounded">backspace</span></button>
-              
-              <button class="keypad-btn num" data-val="4">4</button>
-              <button class="keypad-btn num" data-val="5">5</button>
-              <button class="keypad-btn num" data-val="6">6</button>
-              <button class="keypad-btn action clear" id="btn-num-clear">C</button>
-
-              <button class="keypad-btn num" data-val="1">1</button>
-              <button class="keypad-btn num" data-val="2">2</button>
-              <button class="keypad-btn num" data-val="3">3</button>
-              
-              <!-- Direct Submit Keypad Cell -->
-              <button class="keypad-btn submit-cell" id="btn-fast-submit">
-                <span class="material-symbols-rounded">check_circle</span>
-                <span>登録</span>
-              </button>
-
-              <button class="keypad-btn num zero" data-val="0">0</button>
-              <button class="keypad-btn num" data-val="00">00</button>
+            <!-- Genre Selection Popover / Grid Drawer -->
+            <div id="genre-picker-panel" class="genre-picker-panel hidden">
+              <div class="genre-picker-head">
+                <span>ジャンルを選択</span>
+                <button type="button" id="close-genre-picker-btn" class="icon-btn-mini"><span class="material-symbols-rounded">close</span></button>
+              </div>
+              <div class="genre-picker-grid" id="genre-picker-grid">
+                <!-- Dynamic Genre Options (食費, 日用品, 住居 etc.) -->
+              </div>
             </div>
 
-            <!-- Detailed Form Accordion Trigger -->
-            <details class="details-accordion">
+            <!-- 4. Memo Bar (Full Width) -->
+            <div class="memo-bar-wrapper">
+              <div class="form-block memo-full-block">
+                <span class="block-label">メモ欄</span>
+                <div class="memo-field-inner">
+                  <span class="material-symbols-rounded memo-icon">edit_note</span>
+                  <input type="text" id="input-memo-val" class="memo-full-input" placeholder="メモを入力..." />
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. Detailed Options Accordion (Full Width) -->
+            <details class="details-accordion" id="input-details-accordion">
               <summary class="details-summary">
-                <span><span class="material-symbols-rounded">tune</span> 詳細オプション (日付・口座・メモ・タグ)</span>
+                <span class="summary-left"><span class="material-symbols-rounded">tune</span> 詳細オプション</span>
+                <span class="material-symbols-rounded summary-arrow">expand_more</span>
               </summary>
               <div class="details-body">
                 <div class="form-grid-two">
-                  <div class="form-field">
-                    <label>日付</label>
-                    <input type="date" id="input-date-val" />
-                  </div>
                   <div class="form-field">
                     <label>出金元口座 / 支払方法</label>
                     <select id="input-account-val" class="form-select"></select>
@@ -639,19 +658,45 @@
                     <label>入金先口座 (振替先)</label>
                     <select id="input-to-account-val" class="form-select"></select>
                   </div>
+
+                  <div class="form-field">
+                    <label>店舗名 / 購入先 (任意)</label>
+                    <input type="text" id="input-merchant-val" placeholder="例: スーパー、コンビニ" />
+                  </div>
                   
                   <div class="form-field">
-                    <label>メモ</label>
-                    <input type="text" id="input-memo-val" placeholder="メモを入力..." />
+                    <label>タグ (カンマ区切り)</label>
+                    <input type="text" id="input-tags-val" placeholder="#外食, #固定費 等" />
                   </div>
-                </div>
-
-                <div class="form-field" style="margin-top: 10px;">
-                  <label>タグ (カンマ区切り)</label>
-                  <input type="text" id="input-tags-val" placeholder="#外食, #仕事 等" />
                 </div>
               </div>
             </details>
+
+            <!-- 5. Keypad Grid & Submit -->
+            <div class="keypad-grid">
+              <button type="button" class="keypad-btn num" data-val="7">7</button>
+              <button type="button" class="keypad-btn num" data-val="8">8</button>
+              <button type="button" class="keypad-btn num" data-val="9">9</button>
+              <button type="button" class="keypad-btn action del" id="btn-num-del"><span class="material-symbols-rounded">backspace</span></button>
+              
+              <button type="button" class="keypad-btn num" data-val="4">4</button>
+              <button type="button" class="keypad-btn num" data-val="5">5</button>
+              <button type="button" class="keypad-btn num" data-val="6">6</button>
+              <button type="button" class="keypad-btn action clear" id="btn-num-clear">C</button>
+
+              <button type="button" class="keypad-btn num" data-val="1">1</button>
+              <button type="button" class="keypad-btn num" data-val="2">2</button>
+              <button type="button" class="keypad-btn num" data-val="3">3</button>
+              
+              <!-- Direct Submit Keypad Cell -->
+              <button type="button" class="keypad-btn submit-cell" id="btn-fast-submit">
+                <span class="material-symbols-rounded">check_circle</span>
+                <span>登録</span>
+              </button>
+
+              <button type="button" class="keypad-btn num zero" data-val="0">0</button>
+              <button type="button" class="keypad-btn num" data-val="00">00</button>
+            </div>
 
           </div>
 
@@ -817,7 +862,7 @@
                   <th>項目</th>
                   <th>先月実績</th>
                   <th>今月実績</th>
-                  <th>差額 (MoM)</th>
+                  <th>差額 (前月比)</th>
                 </tr>
               </thead>
               <tbody id="ai-evidence-tbody">
@@ -978,6 +1023,104 @@
           <button id="save-asset-settings-btn" class="primary-btn-full" style="margin-top: 6px;">
             <span class="material-symbols-rounded">save</span> 総資産を保存
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 7: CREDIT CARD CSV IMPORT MODAL      -->
+    <!-- ========================================== -->
+    <div id="csv-import-modal" class="modal-overlay hidden">
+      <div class="modal-card csv-modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group" style="display:flex; align-items:center; gap:8px;">
+            <span class="material-symbols-rounded" style="color:var(--accent-primary);">credit_card</span>
+            <h3>クレジットカード明細 (CSV) 取込</h3>
+          </div>
+          <button id="close-csv-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+        </div>
+
+        <div class="modal-body csv-modal-body">
+          <!-- Step 1: Upload / Dropzone -->
+          <div class="csv-upload-section">
+            <div id="csv-dropzone" class="csv-dropzone">
+              <input type="file" id="csv-file-input" accept=".csv,text/csv,text/comma-separated-values" style="display:none;" />
+              <span class="material-symbols-rounded dropzone-icon">cloud_upload</span>
+              <p class="dropzone-text">CSVファイルをドラッグ＆ドロップ<br><span class="dropzone-sub">または クリックしてファイルを選択</span></p>
+              <div class="dropzone-badge-list">
+                <span class="card-tag">楽天カード</span>
+                <span class="card-tag">三井住友(Vpass)</span>
+                <span class="card-tag">JCB</span>
+                <span class="card-tag">三菱UFJ</span>
+                <span class="card-tag">エポス</span>
+                <span class="card-tag">イオン</span>
+                <span class="card-tag">Shift-JIS / UTF-8 自動判別</span>
+              </div>
+            </div>
+
+            <!-- Account & Options Bar -->
+            <div class="csv-options-row">
+              <div class="form-field csv-account-field">
+                <label for="csv-account-select">引き落とし・記録先口座</label>
+                <select id="csv-account-select" class="form-select">
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+
+              <div class="form-field csv-options-field">
+                <label class="csv-checkbox-label">
+                  <input type="checkbox" id="csv-skip-duplicates-check" checked />
+                  <span>重複明細をスキップ</span>
+                </label>
+                <button type="button" id="load-sample-csv-btn" class="text-link-btn">
+                  <span class="material-symbols-rounded" style="font-size:16px;">experiment</span> サンプル明細で試す
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Preview & Category Mapping Section -->
+          <div id="csv-preview-container" class="csv-preview-container hidden">
+            <div class="csv-preview-header">
+              <div class="preview-stats">
+                <span class="stat-badge total">明細 <strong id="csv-stat-total">0</strong>件</span>
+                <span class="stat-badge new">新規 <strong id="csv-stat-new">0</strong>件</span>
+                <span class="stat-badge duplicate">重複 <strong id="csv-stat-dup">0</strong>件</span>
+                <span class="stat-total-amount">取込予定合計: <strong id="csv-stat-amount">¥0</strong></span>
+              </div>
+              <div class="preview-actions">
+                <button type="button" id="csv-select-all-btn" class="tiny-btn">全選択</button>
+                <button type="button" id="csv-deselect-all-btn" class="tiny-btn">全解除</button>
+              </div>
+            </div>
+
+            <div class="csv-table-scroll">
+              <table class="csv-preview-table">
+                <thead>
+                  <tr>
+                    <th style="width:36px; text-align:center;"><input type="checkbox" id="csv-master-check" checked /></th>
+                    <th style="width:105px;">利用日</th>
+                    <th>利用店名・内容</th>
+                    <th style="width:130px;">カテゴリ</th>
+                    <th style="width:95px; text-align:right;">金額</th>
+                    <th style="width:65px; text-align:center;">状態</th>
+                  </tr>
+                </thead>
+                <tbody id="csv-preview-tbody">
+                  <!-- Dynamic rows generated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Modal Footer Actions -->
+          <div class="csv-modal-footer">
+            <button type="button" id="cancel-csv-import-btn" class="secondary-btn-sm" style="padding:10px 18px;">キャンセル</button>
+            <button type="button" id="confirm-csv-import-btn" class="primary-btn-sm" disabled style="padding:10px 22px;">
+              <span class="material-symbols-rounded">download_done</span>
+              <span id="confirm-csv-import-label">明細を取り込む (0件)</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

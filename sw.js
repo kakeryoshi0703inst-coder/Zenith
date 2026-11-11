@@ -2,7 +2,7 @@
    Zenith Money - Service Worker (Network First with Offline Fallback)
    ==================================================== */
 
-const CACHE_NAME = 'zenith-money-v12';
+const CACHE_NAME = 'zenith-money-v17';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -38,7 +38,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Stale-While-Revalidate for instant smooth startup + background updates
+// Fetch Event - Stale-While-Revalidate with opaque font & CDN caching
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -46,7 +46,8 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
+          // Allow caching of regular 200 responses as well as opaque cross-origin fonts/CDNs
+          if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
             const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, responseToCache);

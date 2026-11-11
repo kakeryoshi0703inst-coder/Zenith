@@ -528,8 +528,146 @@
   }
 
   // ==================================================
-  // 6. UI RENDER ENGINE
+  // 6. UI RENDER ENGINE & OFFLINE ICON FALLBACK
   // ==================================================
+
+  // ====================================================
+  // MINIMALIST LINE ICON REGISTRY (線文字アイコン辞書)
+  // Clean SVG wireframe strokes: 100% offline-ready & crisp
+  // ====================================================
+  const OFFLINE_LINE_ICONS = {
+    // Navigation & Main Dashboard
+    'space_dashboard': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
+    'receipt_long': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8m-8 4h8m-8 4h5"/></svg>',
+    'add': '<svg class="line-icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+    'monitoring': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>',
+    'account_balance_wallet': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
+    'dark_mode': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>',
+    'settings': '<svg class="line-icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    'calendar_month': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    'calendar_today': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    'today': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    'chevron_left': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>',
+    'chevron_right': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>',
+    'trending_up': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+    'trending_down': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>',
+    'edit': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
+    'edit_calendar': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
+    'edit_note': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
+    'pie_chart': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>',
+    'arrow_upward': '<svg class="line-icon-svg" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+    'arrow_downward': '<svg class="line-icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
+    'bolt': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    'auto_awesome': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
+    'history': '<svg class="line-icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    'format_list_bulleted': '<svg class="line-icon-svg" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+    'search': '<svg class="line-icon-svg" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    'close': '<svg class="line-icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    'restart_alt': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg>',
+    'refresh': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg>',
+    'tune': '<svg class="line-icon-svg" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
+    'category': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+    'database': '<svg class="line-icon-svg" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+    'download': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    'download_done': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+    'delete_forever': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+    'delete': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+    'calculate': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/><line x1="8" y1="18" x2="8.01" y2="18"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="16" y1="18" x2="16.01" y2="18"/></svg>',
+    'photo_camera': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+    'mic': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
+    'backspace': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>',
+    'check_circle': '<svg class="line-icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="16 9 10 15 8 13"/></svg>',
+    'check': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+    'arrow_drop_down': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>',
+    'expand_more': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>',
+    'save': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
+    'verified': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+    'cloud_upload': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><polyline points="12 12 12 17"/><polyline points="9 14 12 11 15 14"/></svg>',
+    'experiment': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M10 2v7.31L4.1 19.34A2 2 0 0 0 5.82 22h12.36a2 2 0 0 0 1.72-2.66L14 9.31V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/><line x1="8.5" y1="14" x2="15.5" y2="14"/></svg>',
+
+    // Financial & Spending Categories (線文字アイテムアイコン)
+    'restaurant': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M18 2v20M2 2v8a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V2M10 2v20M22 2v6a2 2 0 0 1-2 2h-2"/></svg>',
+    'shopping_bag': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+    'home': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+    'wifi': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    'directions_bus': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M3 10h18"/><circle cx="7" cy="14" r="1"/><circle cx="17" cy="14" r="1"/><path d="m4 17-2 3"/><path d="m20 17 2 3"/></svg>',
+    'sports_esports': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4m-2-2v4"/><circle cx="15" cy="11" r="1"/><circle cx="17" cy="13" r="1"/></svg>',
+    'medical_services': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M12 10v6m-3-3h6"/></svg>',
+    'subscriptions': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+    'more_horiz': '<svg class="line-icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg>',
+    'payments': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="18" y1="12" x2="18.01" y2="12"/></svg>',
+    'work': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+    'sync_alt': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M21 8H3m0 0 4-4M3 8l4 4m-4 8h18m0 0-4-4m4 4-4 4"/></svg>',
+    'qr_code_2': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3z"/><path d="M20 14v6h-3"/><path d="M14 20h3"/></svg>',
+    'credit_card': '<svg class="line-icon-svg" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>',
+    'show_chart': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+    'savings': '<svg class="line-icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10m-3-5h6"/></svg>',
+    'flight_takeoff': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M2 17h20M4 13l3.5-3.5L12 11l6-6 2 2-6 6 1.5 4.5L16 19l-4-4-5 1z"/></svg>',
+    'shield': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    'account_balance': '<svg class="line-icon-svg" viewBox="0 0 24 24"><line x1="2" y1="21" x2="22" y2="21"/><line x1="4" y1="10" x2="4" y2="18"/><line x1="9" y1="10" x2="9" y2="18"/><line x1="15" y1="10" x2="15" y2="18"/><line x1="20" y1="10" x2="20" y2="18"/><polygon points="12 2 2 7 22 7 12 2"/></svg>'
+  };
+
+  let isMaterialFontLoaded = false;
+
+  function initFontLoadingCheck() {
+    // If browser supports CSS Font Loading API
+    if (document.fonts && document.fonts.check) {
+      if (document.fonts.check('24px "Material Symbols Outlined"') || document.fonts.check('24px "Material Symbols Rounded"')) {
+        isMaterialFontLoaded = true;
+      } else {
+        Promise.any([
+          document.fonts.load('24px "Material Symbols Outlined"'),
+          document.fonts.load('24px "Material Symbols Rounded"')
+        ]).then(() => {
+          isMaterialFontLoaded = true;
+          document.documentElement.classList.remove('offline-icons-mode');
+        }).catch(() => {
+          isMaterialFontLoaded = false;
+          enableOfflineIconMode();
+        });
+      }
+    } else if (!navigator.onLine) {
+      enableOfflineIconMode();
+    }
+
+    window.addEventListener('offline', () => {
+      enableOfflineIconMode();
+    });
+
+    window.addEventListener('online', () => {
+      if (document.fonts && document.fonts.load) {
+        document.fonts.load('24px "Material Symbols Outlined"').then(() => {
+          isMaterialFontLoaded = true;
+          document.documentElement.classList.remove('offline-icons-mode');
+        });
+      }
+    });
+
+    // Check on startup after 350ms to ensure line icon view is instantaneous
+    setTimeout(() => {
+      if (!isMaterialFontLoaded && (document.fonts ? (!document.fonts.check('24px "Material Symbols Outlined"') && !document.fonts.check('24px "Material Symbols Rounded"')) : !navigator.onLine)) {
+        enableOfflineIconMode();
+      }
+    }, 350);
+  }
+
+  function enableOfflineIconMode() {
+    document.documentElement.classList.add('offline-icons-mode');
+    applyOfflineIconFallbacks();
+  }
+
+  function applyOfflineIconFallbacks() {
+    if (isMaterialFontLoaded && navigator.onLine) return;
+
+    document.querySelectorAll('.material-symbols-rounded, .material-symbols-outlined').forEach(el => {
+      const raw = (el.getAttribute('data-icon-raw') || el.textContent).trim();
+      if (raw && OFFLINE_LINE_ICONS[raw]) {
+        el.setAttribute('data-icon-raw', raw);
+        el.innerHTML = OFFLINE_LINE_ICONS[raw];
+        el.classList.add('line-icon-applied');
+      }
+    });
+  }
 
   function renderApp() {
     renderHeaderInfo();
@@ -540,6 +678,7 @@
     renderMonthlyReportView();
     renderSettingsView();
     applyThemeAndModeClass();
+    applyOfflineIconFallbacks();
   }
 
   function applyThemeAndModeClass() {
@@ -725,7 +864,7 @@
       return `
         <div class="tx-item-row" data-id="${t.id}">
           <div class="tx-item-left">
-            <div class="tx-cat-icon" style="background:${cat.color}22; color:${cat.color}">
+            <div class="tx-cat-icon" style="border-color:${cat.color}66; color:${cat.color}; background:transparent;">
               <span class="material-symbols-rounded">${cat.icon}</span>
             </div>
             <div class="tx-item-details">
@@ -791,7 +930,7 @@
               return `
                 <div class="tx-item-row" data-id="${t.id}">
                   <div class="tx-item-left">
-                    <div class="tx-cat-icon" style="background:${cat.color}22; color:${cat.color}">
+                    <div class="tx-cat-icon" style="border-color:${cat.color}66; color:${cat.color}; background:transparent;">
                       <span class="material-symbols-rounded">${cat.icon}</span>
                     </div>
                     <div class="tx-item-details">
@@ -1505,7 +1644,7 @@
         const cat = getCategoryById(catId);
         return `
           <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:13px;">
-            <span><strong>NO.${idx + 1} ${cat.name}</strong></span>
+            <span><strong>第${idx + 1}位 ${cat.name}</strong></span>
             <span style="font-weight:700; color:var(--color-expense)">${formatYenPlain(breakdown[catId])}</span>
           </div>
         `;
@@ -1682,6 +1821,9 @@
 
     bindClick('home-view-all-tx-btn', () => switchTab('tab-transactions'));
     bindClick('settings-trigger-btn', () => switchTab('tab-settings'));
+
+    // Credit Card CSV Import Events
+    setupCsvImportEvents();
   }
 
   function switchTab(tabId) {
@@ -1970,11 +2112,58 @@
   // 8. INPUT MODAL CONTROLLERS (MANUAL / OCR / AI)
   // ==================================================
 
+  function formatDateDisplay(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length < 3) return dateStr;
+    const y = parts[0];
+    const m = Number(parts[1]);
+    const d = Number(parts[2]);
+    const dateObj = new Date(Number(y), m - 1, d);
+    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+    const dayName = isNaN(dateObj.getTime()) ? '' : ` (${dayNames[dateObj.getDay()]})`;
+    return `${y}年 ${m}月 ${d}日${dayName}`;
+  }
+
   function openInputModal() {
     populateInputModalSelects();
-    renderQuickCategoriesBar();
+
+    // Reset Date to Today and sync label
+    const today = getTodayStr();
+    appState.inputModalState.date = today;
     const dateVal = document.getElementById('input-date-val');
-    if (dateVal) dateVal.value = getTodayStr();
+    const dateLabel = document.getElementById('display-date-label');
+    if (dateVal) dateVal.value = today;
+    if (dateLabel) dateLabel.textContent = formatDateDisplay(today);
+
+    // Reset Amount & Memo
+    appState.inputModalState.amountStr = '0';
+    const amountInput = document.getElementById('input-amount-val');
+    if (amountInput) amountInput.value = '0';
+
+    const memoInput = document.getElementById('input-memo-val');
+    if (memoInput) memoInput.value = '';
+
+    const merchantInput = document.getElementById('input-merchant-val');
+    if (merchantInput) merchantInput.value = '';
+
+    const tagsInput = document.getElementById('input-tags-val');
+    if (tagsInput) tagsInput.value = '';
+
+    // Close Genre popover & collapse details by default
+    const genrePanel = document.getElementById('genre-picker-panel');
+    if (genrePanel) genrePanel.classList.add('hidden');
+
+    const detailsAccordion = document.getElementById('input-details-accordion');
+    if (detailsAccordion) detailsAccordion.removeAttribute('open');
+
+    // Ensure category matches type
+    const matchingCat = appState.categories.find(c => c.type === appState.inputModalState.type) || appState.categories[0];
+    appState.inputModalState.categoryId = matchingCat.id;
+
+    updateSelectedGenreUI();
+    renderGenrePicker();
+
     const overlay = document.getElementById('input-modal-overlay');
     if (overlay) overlay.classList.remove('hidden');
   }
@@ -1982,6 +2171,9 @@
   function closeInputModal() {
     const overlay = document.getElementById('input-modal-overlay');
     if (overlay) overlay.classList.add('hidden');
+
+    const genrePanel = document.getElementById('genre-picker-panel');
+    if (genrePanel) genrePanel.classList.add('hidden');
   }
 
   function switchInputTab(mode) {
@@ -2005,34 +2197,49 @@
     if (toAccSelect) toAccSelect.innerHTML = options;
   }
 
-  function renderQuickCategoriesBar() {
-    const bar = document.getElementById('quick-categories-bar');
-    if (!bar) return;
-    const typeCats = appState.categories.filter(c => c.type === appState.inputModalState.type || (appState.inputModalState.type === 'transfer' && c.type === 'transfer'));
+  // Render All Categories in Genre Picker (食費、日用品 etc. all included)
+  function renderGenrePicker() {
+    const grid = document.getElementById('genre-picker-grid');
+    if (!grid) return;
 
-    bar.innerHTML = typeCats.map(c => `
-      <button class="cat-chip-btn ${c.id === appState.inputModalState.categoryId ? 'selected' : ''}" data-id="${c.id}">
-        <span class="material-symbols-rounded">${c.icon}</span> ${c.name}
+    const currentType = appState.inputModalState.type;
+    const typeCats = appState.categories.filter(c => c.type === currentType || (currentType === 'transfer' && c.type === 'transfer'));
+
+    grid.innerHTML = typeCats.map(c => `
+      <button type="button" class="genre-select-chip ${c.id === appState.inputModalState.categoryId ? 'selected' : ''}" data-id="${c.id}">
+        <span class="material-symbols-rounded" style="color:${c.color}">${c.icon}</span>
+        <span>${c.name}</span>
       </button>
     `).join('');
 
-    bar.querySelectorAll('.cat-chip-btn').forEach(btn => {
+    grid.querySelectorAll('.genre-select-chip').forEach(btn => {
       btn.addEventListener('click', () => {
         appState.inputModalState.categoryId = btn.getAttribute('data-id');
-        renderQuickCategoriesBar();
-        updateSelectedCatBadge();
+        updateSelectedGenreUI();
+        renderGenrePicker();
+        // Automatically close genre popover on selection
+        const panel = document.getElementById('genre-picker-panel');
+        if (panel) panel.classList.add('hidden');
       });
     });
 
-    updateSelectedCatBadge();
+    applyOfflineIconFallbacks();
   }
 
-  function updateSelectedCatBadge() {
+  function updateSelectedGenreUI() {
     const cat = getCategoryById(appState.inputModalState.categoryId);
     const iconEl = document.getElementById('selected-cat-icon');
     const nameEl = document.getElementById('selected-cat-name');
-    if (iconEl) iconEl.textContent = cat.icon;
-    if (nameEl) nameEl.textContent = cat.name;
+    if (iconEl) {
+      iconEl.textContent = cat.icon;
+      iconEl.style.color = cat.color || 'var(--accent-primary)';
+      iconEl.classList.remove('emoji-fallback');
+      iconEl.removeAttribute('data-icon-raw');
+    }
+    if (nameEl) {
+      nameEl.textContent = cat.name;
+    }
+    applyOfflineIconFallbacks();
   }
 
   function setupTypeSelectorEvents() {
@@ -2048,80 +2255,145 @@
         const transField = document.getElementById('transfer-destination-field');
         if (transField) transField.classList.toggle('hidden', !isTransfer);
 
-        const matchingCat = appState.categories.find(c => c.type === type);
+        const matchingCat = appState.categories.find(c => c.type === type) || appState.categories[0];
         if (matchingCat) appState.inputModalState.categoryId = matchingCat.id;
 
-        renderQuickCategoriesBar();
+        updateSelectedGenreUI();
+        renderGenrePicker();
       });
     });
   }
 
-  function setupKeypadEvents() {
-    const display = document.getElementById('keypad-display-amount');
+  function updateAmountDisplay(newValStr) {
+    appState.inputModalState.amountStr = newValStr;
+    const amountInput = document.getElementById('input-amount-val');
+    if (amountInput) {
+      amountInput.value = newValStr === '0' ? '0' : Number(newValStr).toLocaleString('ja-JP');
+    }
+  }
 
+  function setupKeypadEvents() {
+    const amountInput = document.getElementById('input-amount-val');
+
+    // 1. Manual Text Field Direct Tap & Typing Listener
+    if (amountInput) {
+      amountInput.addEventListener('focus', () => {
+        // Strip formatting commas on focus so user can easily edit
+        const raw = amountInput.value.replace(/,/g, '');
+        if (raw === '0') amountInput.value = '';
+        else amountInput.value = raw;
+      });
+
+      amountInput.addEventListener('input', (e) => {
+        // Only keep numeric digits
+        const cleaned = e.target.value.replace(/[^\d]/g, '');
+        appState.inputModalState.amountStr = cleaned || '0';
+      });
+
+      amountInput.addEventListener('blur', () => {
+        // Re-format with commas when focus leaves
+        const num = Number(appState.inputModalState.amountStr) || 0;
+        amountInput.value = num === 0 ? '0' : num.toLocaleString('ja-JP');
+      });
+    }
+
+    // 2. Date Input Change Sync Listener
+    const dateInput = document.getElementById('input-date-val');
+    const dateLabel = document.getElementById('display-date-label');
+    if (dateInput) {
+      dateInput.addEventListener('change', () => {
+        if (dateLabel) {
+          dateLabel.textContent = formatDateDisplay(dateInput.value);
+        }
+        appState.inputModalState.date = dateInput.value;
+      });
+    }
+
+    // 3. Genre Selector Trigger Popover
+    const genreTrigger = document.getElementById('genre-select-trigger');
+    const genrePanel = document.getElementById('genre-picker-panel');
+    const closeGenreBtn = document.getElementById('close-genre-picker-btn');
+
+    if (genreTrigger && genrePanel) {
+      genreTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderGenrePicker();
+        genrePanel.classList.toggle('hidden');
+      });
+    }
+
+    if (closeGenreBtn && genrePanel) {
+      closeGenreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        genrePanel.classList.add('hidden');
+      });
+    }
+
+    // 4. Touch Numpad Grid Clicks
     document.querySelectorAll('.keypad-btn.num').forEach(btn => {
       btn.addEventListener('click', () => {
         const val = btn.getAttribute('data-val');
-        if (appState.inputModalState.amountStr === '0') {
-          appState.inputModalState.amountStr = val;
+        let cur = appState.inputModalState.amountStr.replace(/,/g, '');
+        if (cur === '0') {
+          cur = val === '00' ? '0' : val;
         } else {
-          appState.inputModalState.amountStr += val;
+          cur += val;
         }
-        if (display) display.textContent = Number(appState.inputModalState.amountStr).toLocaleString('ja-JP');
+        updateAmountDisplay(cur);
       });
     });
 
     const delBtn = document.getElementById('btn-num-del');
     if (delBtn) {
       delBtn.addEventListener('click', () => {
-        let str = appState.inputModalState.amountStr;
+        let str = appState.inputModalState.amountStr.replace(/,/g, '');
         str = str.slice(0, -1);
         if (!str || str === '') str = '0';
-        appState.inputModalState.amountStr = str;
-        if (display) display.textContent = Number(str).toLocaleString('ja-JP');
+        updateAmountDisplay(str);
       });
     }
 
     const clearBtn = document.getElementById('btn-num-clear');
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        appState.inputModalState.amountStr = '0';
-        if (display) display.textContent = '0';
+        updateAmountDisplay('0');
       });
     }
 
-    // Merchant chip fill
-    document.querySelectorAll('.merchant-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        const inp = document.getElementById('input-merchant-val');
-        if (inp) inp.value = chip.getAttribute('data-merchant');
-      });
-    });
-
-    // 3-Tap Fast Submit
+    // 5. Direct Submit Button
     const fastSubmitBtn = document.getElementById('btn-fast-submit');
     if (fastSubmitBtn) fastSubmitBtn.addEventListener('click', saveManualTransaction);
   }
 
   function saveManualTransaction() {
-    const amount = Number(appState.inputModalState.amountStr);
+    const amountInput = document.getElementById('input-amount-val');
+    const rawVal = amountInput ? amountInput.value.replace(/,/g, '') : appState.inputModalState.amountStr;
+    const amount = Number(rawVal) || 0;
+
     if (amount <= 0) {
       alert('1円以上の金額を入力してください');
+      if (amountInput) amountInput.focus();
       return;
     }
 
+    const memoInput = document.getElementById('input-memo-val');
     const merchantInput = document.getElementById('input-merchant-val');
+    const dateInput = document.getElementById('input-date-val');
+    const accInput = document.getElementById('input-account-val');
+    const toAccInput = document.getElementById('input-to-account-val');
+    const tagsInput = document.getElementById('input-tags-val');
+
     const newTx = {
       id: generateUUID(),
       type: appState.inputModalState.type,
       amount: amount,
-      date: (document.getElementById('input-date-val') || {}).value || getTodayStr(),
+      date: (dateInput && dateInput.value) ? dateInput.value : getTodayStr(),
       category_id: appState.inputModalState.categoryId,
-      account_id: (document.getElementById('input-account-val') || {}).value || 'acc_cash',
-      to_account_id: appState.inputModalState.type === 'transfer' ? (document.getElementById('input-to-account-val') || {}).value : undefined,
+      account_id: (accInput && accInput.value) ? accInput.value : 'acc_cash',
+      to_account_id: appState.inputModalState.type === 'transfer' ? (toAccInput ? toAccInput.value : undefined) : undefined,
       merchant: merchantInput ? merchantInput.value : undefined,
-      memo: (document.getElementById('input-memo-val') || {}).value || undefined,
-      tags: (document.getElementById('input-tags-val') || {}).value ? document.getElementById('input-tags-val').value.split(',').map(t => t.trim()) : [],
+      memo: (memoInput && memoInput.value.trim()) ? memoInput.value.trim() : undefined,
+      tags: (tagsInput && tagsInput.value) ? tagsInput.value.split(',').map(t => t.trim()).filter(Boolean) : [],
       source: 'manual',
       user_verified: true
     };
@@ -2132,14 +2404,15 @@
     appState.transactions.unshift(newTx);
     saveStateToStorage();
 
-    // Reset Modal
+    // Reset Modal State
     appState.inputModalState.amountStr = '0';
-    const display = document.getElementById('keypad-display-amount');
-    if (display) display.textContent = '0';
+    if (amountInput) amountInput.value = '0';
+    if (memoInput) memoInput.value = '';
     closeInputModal();
 
     renderApp();
-    showToast('取引を記録しました');
+    const cat = getCategoryById(newTx.category_id);
+    showToast(`「${cat.name}」¥${amount.toLocaleString('ja-JP')} を記録しました`);
   }
 
   function applyAccountBalanceChange(tx) {
@@ -2946,6 +3219,544 @@
   }
 
   // ==================================================
+  // 8. CREDIT CARD STATEMENT (CSV) IMPORT & DB SYNC
+  // ==================================================
+
+  let parsedCsvItems = [];
+
+  function detectCategoryFromMerchant(merchant) {
+    if (!merchant) return 'cat_food';
+    const m = String(merchant).toLowerCase();
+
+    // Food & Dining / Supermarkets / Convenience / Delivery
+    if (/セブン|ローソン|ファミマ|ファミリーマート|ミニストップ|デイリーヤマザキ|イオン|マックスバリュ|ライフ|マルエツ|西友|イトーヨーカド|オーケー|業務スーパー|まいばすけっと|サミット|ヤオコー|スターバックス|starbucks|マクドナルド|mcdonald|ドトール|doutor|コメダ|サイゼリヤ|ガスト|すかいらーく|吉野家|松屋|すき家|丸亀製麺|モスバーガー|スシロー|くら寿司|はま寿司|uber\s*eats|出前館|食べログ|ぐるなび|レストラン|居酒屋|カフェ|食堂|ベーカリー|寿司|ラーメン|焼肉/.test(m)) {
+      return 'cat_food';
+    }
+
+    // Daily necessities / Drugstore / Pharmacy / Clothing
+    if (/マツモトキヨシ|マツキヨ|ウエルシア|welcia|スギ薬局|ツルハ|サンドラッグ|ココカラファイン|ダイソー|daiso|セリア|seria|キャンドゥ|無印良品|muji|ドン・キホーテ|ドンキ|ユニクロ|uniqlo|gu|ジーユー|しまむら|zara|h&m|薬局|ドラッグストア/.test(m)) {
+      return 'cat_daily';
+    }
+
+    // Housing / Furniture / Interior / DIY
+    if (/ニトリ|イケア|ikea|カインズ|コーナン|島忠|家賃|管理費|レオパレス|大東建託/.test(m)) {
+      return 'cat_housing';
+    }
+
+    // Utilities & Communications / Mobile / Internet
+    if (/東京電力|関西電力|中部電力|九州電力|東北電力|東京ガス|大阪ガス|東邦ガス|水道局|ntt|ドコモ|docomo|kddi|au|softbank|ソフトバンク|楽天モバイル|uq|ワイモバイル|ymobile|ocn|biglobe|wifi|通信料|でんき|ガス/.test(m)) {
+      return 'cat_comm';
+    }
+
+    // Transportation / Gas / Parking / Highway
+    if (/jr|東日本|西日本|東海|東京メトロ|メトロ|都営|私鉄|suica|pasmo|icoca|モバイルsuica|モバイルpasmo|タクシー|taxi|goタクシー|uber\s*trip|eneos|エネオス|出光|アポロステーション|コスモ石油|キグナス|ガソリン|タイムズ|times|コインパーキング|駐車場|高速道路|etc/.test(m)) {
+      return 'cat_trans';
+    }
+
+    // Subscriptions & Cloud services
+    if (/netflix|ネットフリックス|spotify|スポティファイ|amazon\s*prime|アマゾンプライム|プライム会費|youtube|ユーチューブ|apple\.com|apple\s*services|itunes|icloud|google\s*storage|google\s*one|hulu|disney\+|ディズニープラス|dazn|abema|audible|chatgpt|openai/.test(m)) {
+      return 'cat_sub';
+    }
+
+    // Entertainment / Electronics / Games / Cinema / Books
+    if (/ビックカメラ|ヨドバシ|ソフマップ|ヤマダ|エディオン|ケーズデンキ|tohoシネマズ|109シネマズ|ユナイテッド・シネマ|映画|ニンテンドー|nintendo|playstation|psn|steam|dmm|カラオケ|ラウンドワン|紀伊國屋|丸善|ジュンク堂|book|tsutaya|amazon|アマゾン/.test(m)) {
+      return 'cat_ent';
+    }
+
+    // Medical & Healthcare
+    if (/クリニック|医院|病院|歯科|デンタル|耳鼻科|眼科|内科|皮膚科|薬局|処方せん|調剤|マッサージ|整体|整骨院/.test(m)) {
+      return 'cat_med';
+    }
+
+    // Income / Cashbacks
+    if (/給与|賞与|振込入金|利息|キャッシュバック|ポイント還元/.test(m)) {
+      return 'cat_salary';
+    }
+
+    return 'cat_misc';
+  }
+
+  function normalizeDateString(str) {
+    if (!str) return getTodayStr();
+    str = String(str).trim();
+    // 8-digit format: 20261105
+    if (/^\d{8}$/.test(str)) {
+      return `${str.substr(0, 4)}-${str.substr(4, 2)}-${str.substr(6, 2)}`;
+    }
+    // Reiwa format: R6/11/05 or 令和6年11月5日
+    const reiwaMatch = str.match(/(?:R|令和)\s*(\d{1,2})[./年\-](\d{1,2})[./月\-](\d{1,2})/i);
+    if (reiwaMatch) {
+      const year = 2018 + parseInt(reiwaMatch[1], 10);
+      const m = String(reiwaMatch[2]).padStart(2, '0');
+      const d = String(reiwaMatch[3]).padStart(2, '0');
+      return `${year}-${m}-${d}`;
+    }
+    // Standard format: YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD, YYYY年MM月DD日
+    const match = str.match(/(\d{2,4})[./年\-](\d{1,2})[./月\-](\d{1,2})/);
+    if (match) {
+      let y = match[1];
+      if (y.length === 2) y = '20' + y;
+      const m = String(match[2]).padStart(2, '0');
+      const d = String(match[3]).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return getTodayStr();
+  }
+
+  function normalizeAmount(val) {
+    if (typeof val === 'number') return Math.abs(val);
+    if (!val) return 0;
+    let s = String(val).replace(/[¥￥,\s円]/g, '').trim();
+    if (s.startsWith('(') && s.endsWith(')')) s = '-' + s.slice(1, -1);
+    const n = parseInt(s, 10);
+    return isNaN(n) ? 0 : Math.abs(n);
+  }
+
+  function parseCSVLine(line) {
+    const row = [];
+    let insideQuote = false;
+    let entry = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (insideQuote && line[i + 1] === '"') {
+          entry += '"';
+          i++;
+        } else {
+          insideQuote = !insideQuote;
+        }
+      } else if (c === ',' && !insideQuote) {
+        row.push(entry.trim());
+        entry = '';
+      } else {
+        entry += c;
+      }
+    }
+    row.push(entry.trim());
+    return row.map(col => col.replace(/^["']|["']$/g, '').trim());
+  }
+
+  function isTransactionDuplicate(date, merchant, amount) {
+    const normMerchant = (merchant || '').trim().toLowerCase();
+    const numAmount = Math.round(Number(amount) || 0);
+
+    return appState.transactions.some(t => {
+      if (t.date !== date) return false;
+      if (Math.round(Number(t.amount) || 0) !== numAmount) return false;
+      const tMerchant = (t.merchant || t.memo || '').trim().toLowerCase();
+      return tMerchant === normMerchant || tMerchant.includes(normMerchant) || normMerchant.includes(tMerchant);
+    });
+  }
+
+  function parseCreditCardCSV(csvText) {
+    if (!csvText) return [];
+    const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+
+    let headerIndex = -1;
+    let dateCol = -1;
+    let merchantCol = -1;
+    let amountCol = -1;
+    let categoryCol = -1;
+
+    const dateKeywords = ['利用日', '利用年月日', 'ご利用日', '年月日', '日付', '購入日', 'date'];
+    const merchantKeywords = ['利用店名', 'ご利用先', '利用場所', 'ご利用店', '店名', '店舗', '加盟店', '摘要', '内容', 'merchant', 'description'];
+    const amountKeywords = ['利用金額', '今回お支払い金額', '支払金額', '支払総額', '金額', '利用代金', 'amount', 'price'];
+    const catKeywords = ['カテゴリ', 'カテゴリー', 'ジャンル', 'category'];
+
+    for (let i = 0; i < Math.min(lines.length, 10); i++) {
+      const cols = parseCSVLine(lines[i]);
+      let dCol = -1, mCol = -1, aCol = -1, cCol = -1;
+
+      cols.forEach((col, idx) => {
+        const lower = col.toLowerCase();
+        if (dCol === -1 && dateKeywords.some(k => lower.includes(k))) dCol = idx;
+        if (mCol === -1 && merchantKeywords.some(k => lower.includes(k))) mCol = idx;
+        if (aCol === -1 && amountKeywords.some(k => lower.includes(k))) aCol = idx;
+        if (cCol === -1 && catKeywords.some(k => lower.includes(k))) cCol = idx;
+      });
+
+      // If at least date and amount (or date and merchant) are found, consider this the header row
+      if (dCol !== -1 && (aCol !== -1 || mCol !== -1)) {
+        headerIndex = i;
+        dateCol = dCol;
+        merchantCol = mCol;
+        amountCol = aCol;
+        categoryCol = cCol;
+        break;
+      }
+    }
+
+    // Heuristic fallback if no header found
+    const startIndex = headerIndex >= 0 ? headerIndex + 1 : 0;
+    if (headerIndex === -1) {
+      dateCol = 0;
+      merchantCol = 1;
+      amountCol = 2;
+    } else if (merchantCol === -1) {
+      // Find first column that is neither date nor amount
+      merchantCol = [0, 1, 2, 3].find(idx => idx !== dateCol && idx !== amountCol) || 1;
+    }
+
+    const items = [];
+    const skipDupEl = document.getElementById('csv-skip-duplicates-check');
+    const skipDuplicates = skipDupEl ? skipDupEl.checked : true;
+
+    for (let i = startIndex; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < 2) continue;
+
+      const rawDate = cols[dateCol] || '';
+      const rawMerchant = cols[merchantCol] || '';
+      const rawAmount = cols[amountCol] || '';
+      const rawCategory = categoryCol !== -1 ? cols[categoryCol] : '';
+
+      // Skip lines with no recognizable date or summary lines
+      if (!rawDate || /合計|小計|総計|total|subtotal/i.test(rawMerchant + rawDate)) continue;
+
+      const date = normalizeDateString(rawDate);
+      const amount = normalizeAmount(rawAmount);
+      if (amount <= 0) continue; // Skip zero or invalid amounts
+
+      let merchant = rawMerchant.replace(/[\t\r\n]+/g, ' ').trim();
+      // Remove common prefix noise like VPASS codes or fullwidth spaces
+      merchant = merchant.replace(/^[０-９A-Z\s]+(?=[^\s])/i, '').trim() || rawMerchant;
+
+      // Category detection
+      let categoryId = 'cat_food';
+      if (rawCategory) {
+        const found = appState.categories.find(c => c.name === rawCategory.trim());
+        if (found) categoryId = found.id;
+        else categoryId = detectCategoryFromMerchant(merchant);
+      } else {
+        categoryId = detectCategoryFromMerchant(merchant);
+      }
+
+      const isDup = isTransactionDuplicate(date, merchant, amount);
+
+      items.push({
+        id: 'csv_row_' + i + '_' + Date.now().toString(36),
+        date,
+        merchant,
+        amount,
+        category_id: categoryId,
+        isDuplicate: isDup,
+        selected: isDup && skipDuplicates ? false : true
+      });
+    }
+
+    return items;
+  }
+
+  function openCsvImportModal() {
+    const modal = document.getElementById('csv-import-modal');
+    if (!modal) return;
+
+    // Populate Account Selector
+    const accSelect = document.getElementById('csv-account-select');
+    if (accSelect) {
+      accSelect.innerHTML = '';
+      appState.accounts.forEach(acc => {
+        const opt = document.createElement('option');
+        opt.value = acc.id;
+        opt.textContent = `${acc.name} (${acc.type === 'liability' ? 'クレジットカード' : '口座'})`;
+        if (acc.id === 'acc_card' || acc.type === 'liability') {
+          opt.selected = true;
+        }
+        accSelect.appendChild(opt);
+      });
+    }
+
+    // Reset preview
+    parsedCsvItems = [];
+    const previewContainer = document.getElementById('csv-preview-container');
+    if (previewContainer) previewContainer.classList.add('hidden');
+    const tbody = document.getElementById('csv-preview-tbody');
+    if (tbody) tbody.innerHTML = '';
+    const fileInput = document.getElementById('csv-file-input');
+    if (fileInput) fileInput.value = '';
+    updateConfirmCsvBtn();
+
+    modal.classList.remove('hidden');
+    applyOfflineIconFallbacks();
+  }
+
+  function closeCsvImportModal() {
+    const modal = document.getElementById('csv-import-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function handleCsvFile(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const buffer = e.target.result;
+      let text = '';
+      try {
+        // Try UTF-8 first (strict fatal mode to catch invalid Shift-JIS sequences)
+        text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      } catch (err) {
+        // Fallback to Shift-JIS (common in Japanese credit cards)
+        text = new TextDecoder('shift-jis').decode(buffer);
+      }
+      processCsvContent(text);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function loadSampleCsvData() {
+    const sampleCsv = `利用日,利用店名・商品名,利用金額,支払区分
+2026/11/02,セブン－イレブン,748,1回払い
+2026/11/03,Ａｍａｚｏｎ．ｃｏ．ｊｐ,3480,1回払い
+2026/11/04,Ｎｅｔｆｌｉｘ 月額利用料,1490,1回払い
+2026/11/05,マツモトキヨシ,2150,1回払い
+2026/11/06,スターバックスコーヒー,680,1回払い
+2026/11/07,東京電力エナジーパートナー,7820,1回払い
+2026/11/08,ライフ 渋谷店,4320,1回払い
+2026/11/08,ユニクロ 渋谷道玄坂店,5990,1回払い
+2026/11/09,ＪＲ東日本 モバイルＳｕｉｃａ,3000,1回払い
+2026/11/09,スシロー,2840,1回払い`;
+
+    processCsvContent(sampleCsv);
+    showToast('サンプル明細(10件)を読み込みました');
+  }
+
+  function processCsvContent(csvText) {
+    parsedCsvItems = parseCreditCardCSV(csvText);
+
+    if (parsedCsvItems.length === 0) {
+      alert('明細データが見つかりませんでした。CSVファイルの列構成（日付、利用店名、金額）をご確認ください。');
+      return;
+    }
+
+    renderCsvPreviewTable();
+    const previewContainer = document.getElementById('csv-preview-container');
+    if (previewContainer) previewContainer.classList.remove('hidden');
+    updateConfirmCsvBtn();
+  }
+
+  function renderCsvPreviewTable() {
+    const tbody = document.getElementById('csv-preview-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const expenseCategories = appState.categories.filter(c => c.type === 'expense');
+
+    parsedCsvItems.forEach(item => {
+      const tr = document.createElement('tr');
+      if (item.isDuplicate) tr.classList.add('is-duplicate');
+
+      let catOptionsHtml = '';
+      expenseCategories.forEach(c => {
+        catOptionsHtml += `<option value="${c.id}" ${c.id === item.category_id ? 'selected' : ''}>${c.name}</option>`;
+      });
+
+      tr.innerHTML = `
+        <td style="text-align:center;">
+          <input type="checkbox" class="csv-row-check" data-id="${item.id}" ${item.selected ? 'checked' : ''} />
+        </td>
+        <td>
+          <input type="date" class="csv-row-date date-bar-input" data-id="${item.id}" value="${item.date}" style="padding:2px 4px; font-size:11px; border:1px solid var(--border-color); border-radius:4px; width:100%; background:var(--surface-2); color:var(--text-primary);" />
+        </td>
+        <td>
+          <div class="csv-item-merchant" title="${item.merchant}">${item.merchant || '（店名なし）'}</div>
+        </td>
+        <td>
+          <select class="csv-cat-select" data-id="${item.id}">
+            ${catOptionsHtml}
+          </select>
+        </td>
+        <td style="text-align:right; font-weight:700; color:var(--color-expense);">
+          ¥${item.amount.toLocaleString('ja-JP')}
+        </td>
+        <td style="text-align:center;">
+          <span class="badge-status-${item.isDuplicate ? 'dup' : 'new'}">${item.isDuplicate ? '重複' : '新規'}</span>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+
+    // Row Event Listeners
+    tbody.querySelectorAll('.csv-row-check').forEach(chk => {
+      chk.addEventListener('change', (e) => {
+        const id = e.target.getAttribute('data-id');
+        const item = parsedCsvItems.find(it => it.id === id);
+        if (item) item.selected = e.target.checked;
+        updateConfirmCsvBtn();
+      });
+    });
+
+    tbody.querySelectorAll('.csv-cat-select').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const id = e.target.getAttribute('data-id');
+        const item = parsedCsvItems.find(it => it.id === id);
+        if (item) item.category_id = e.target.value;
+      });
+    });
+
+    tbody.querySelectorAll('.csv-row-date').forEach(inp => {
+      inp.addEventListener('change', (e) => {
+        const id = e.target.getAttribute('data-id');
+        const item = parsedCsvItems.find(it => it.id === id);
+        if (item && e.target.value) item.date = e.target.value;
+      });
+    });
+
+    updateConfirmCsvBtn();
+  }
+
+  function updateConfirmCsvBtn() {
+    const total = parsedCsvItems.length;
+    const newCount = parsedCsvItems.filter(it => !it.isDuplicate).length;
+    const dupCount = parsedCsvItems.filter(it => it.isDuplicate).length;
+
+    const selectedItems = parsedCsvItems.filter(it => it.selected);
+    const selectedCount = selectedItems.length;
+    const selectedAmount = selectedItems.reduce((acc, it) => acc + it.amount, 0);
+
+    const totalEl = document.getElementById('csv-stat-total');
+    const newEl = document.getElementById('csv-stat-new');
+    const dupEl = document.getElementById('csv-stat-dup');
+    const amountEl = document.getElementById('csv-stat-amount');
+
+    if (totalEl) totalEl.textContent = total;
+    if (newEl) newEl.textContent = newCount;
+    if (dupEl) dupEl.textContent = dupCount;
+    if (amountEl) amountEl.textContent = `¥${selectedAmount.toLocaleString('ja-JP')}`;
+
+    const confirmBtn = document.getElementById('confirm-csv-import-btn');
+    const confirmLabel = document.getElementById('confirm-csv-import-label');
+
+    if (confirmBtn && confirmLabel) {
+      confirmBtn.disabled = selectedCount === 0;
+      confirmLabel.textContent = `明細を取り込む (${selectedCount}件)`;
+    }
+
+    const masterCheck = document.getElementById('csv-master-check');
+    if (masterCheck && total > 0) {
+      masterCheck.checked = selectedCount === total;
+      masterCheck.indeterminate = selectedCount > 0 && selectedCount < total;
+    }
+  }
+
+  function executeCsvImport() {
+    const selectedItems = parsedCsvItems.filter(it => it.selected);
+    if (selectedItems.length === 0) return;
+
+    const accSelect = document.getElementById('csv-account-select');
+    const targetAccountId = (accSelect && accSelect.value) ? accSelect.value : 'acc_card';
+    const targetAccount = getAccountById(targetAccountId);
+    const cardAccountName = targetAccount ? targetAccount.name : 'クレジットカード';
+
+    selectedItems.forEach(item => {
+      const newTx = {
+        id: generateUUID(),
+        type: 'expense',
+        amount: item.amount,
+        date: item.date,
+        category_id: item.category_id,
+        account_id: targetAccountId,
+        merchant: item.merchant,
+        memo: item.merchant,
+        tags: ['クレジットカード', 'CSV取込', cardAccountName],
+        source: 'credit_card_csv',
+        user_verified: true,
+        card_hash: `${item.date}_${item.merchant}_${item.amount}`,
+        created_at: new Date().toISOString()
+      };
+
+      applyAccountBalanceChange(newTx);
+      appState.transactions.unshift(newTx);
+    });
+
+    saveStateToStorage();
+    closeCsvImportModal();
+    renderApp();
+    showToast(`クレジットカード明細 ${selectedItems.length}件を取り込みました`);
+  }
+
+  function setupCsvImportEvents() {
+    bindClick('open-csv-import-btn', openCsvImportModal);
+    bindClick('settings-csv-import-btn', openCsvImportModal);
+    bindClick('close-csv-modal-btn', closeCsvImportModal);
+    bindClick('cancel-csv-import-btn', closeCsvImportModal);
+    bindClick('load-sample-csv-btn', loadSampleCsvData);
+    bindClick('confirm-csv-import-btn', executeCsvImport);
+
+    const dropzone = document.getElementById('csv-dropzone');
+    const fileInput = document.getElementById('csv-file-input');
+
+    if (dropzone && fileInput) {
+      dropzone.addEventListener('click', () => fileInput.click());
+
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('drag-over');
+      });
+
+      dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('drag-over');
+      });
+
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleCsvFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleCsvFile(e.target.files[0]);
+        }
+      });
+    }
+
+    const masterCheck = document.getElementById('csv-master-check');
+    if (masterCheck) {
+      masterCheck.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        parsedCsvItems.forEach(it => it.selected = checked);
+        document.querySelectorAll('.csv-row-check').forEach(chk => chk.checked = checked);
+        updateConfirmCsvBtn();
+      });
+    }
+
+    bindClick('csv-select-all-btn', () => {
+      parsedCsvItems.forEach(it => it.selected = true);
+      document.querySelectorAll('.csv-row-check').forEach(chk => chk.checked = true);
+      updateConfirmCsvBtn();
+    });
+
+    bindClick('csv-deselect-all-btn', () => {
+      parsedCsvItems.forEach(it => it.selected = false);
+      document.querySelectorAll('.csv-row-check').forEach(chk => chk.checked = false);
+      updateConfirmCsvBtn();
+    });
+
+    const skipDupCheck = document.getElementById('csv-skip-duplicates-check');
+    if (skipDupCheck) {
+      skipDupCheck.addEventListener('change', (e) => {
+        const skip = e.target.checked;
+        parsedCsvItems.forEach(it => {
+          if (it.isDuplicate) {
+            it.selected = !skip;
+          }
+        });
+        document.querySelectorAll('.csv-row-check').forEach(chk => {
+          const id = chk.getAttribute('data-id');
+          const item = parsedCsvItems.find(it => it.id === id);
+          if (item) chk.checked = item.selected;
+        });
+        updateConfirmCsvBtn();
+      });
+    }
+  }
+
+  // ==================================================
   // 9. APP INITIALIZATION BOOTSTRAP
   // ==================================================
 
@@ -2958,6 +3769,7 @@
       appState.inputModalState.date = getTodayStr();
 
       setupEventListeners();
+      initFontLoadingCheck();
       renderApp();
 
       // Whenever user returns to the app from background or unlocks device, sync to current date and refresh Home
