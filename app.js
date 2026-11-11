@@ -128,6 +128,16 @@
     return appState.accounts.find(a => a.id === id) || appState.accounts[0];
   }
 
+  function bindClick(id, fn) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+
+  function bindEvent(id, eventName, fn) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(eventName, fn);
+  }
+
   // ==================================================
   // 3. SAMPLE DATA GENERATOR
   // ==================================================
@@ -583,6 +593,7 @@
     'save': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
     'verified': '<svg class="line-icon-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
     'cloud_upload': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><polyline points="12 12 12 17"/><polyline points="9 14 12 11 15 14"/></svg>',
+    'folder_open': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/></svg>',
     'experiment': '<svg class="line-icon-svg" viewBox="0 0 24 24"><path d="M10 2v7.31L4.1 19.34A2 2 0 0 0 5.82 22h12.36a2 2 0 0 0 1.72-2.66L14 9.31V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/><line x1="8.5" y1="14" x2="15.5" y2="14"/></svg>',
 
     // Financial & Spending Categories (線文字アイテムアイコン)
@@ -3680,10 +3691,19 @@
   function setupCsvImportEvents() {
     bindClick('open-csv-import-btn', openCsvImportModal);
     bindClick('settings-csv-import-btn', openCsvImportModal);
+    bindClick('assets-csv-import-btn', openCsvImportModal);
+    bindClick('home-csv-import-btn', openCsvImportModal);
     bindClick('close-csv-modal-btn', closeCsvImportModal);
     bindClick('cancel-csv-import-btn', closeCsvImportModal);
     bindClick('load-sample-csv-btn', loadSampleCsvData);
     bindClick('confirm-csv-import-btn', executeCsvImport);
+
+    const modal = document.getElementById('csv-import-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeCsvImportModal();
+      });
+    }
 
     const dropzone = document.getElementById('csv-dropzone');
     const fileInput = document.getElementById('csv-file-input');
@@ -3714,6 +3734,20 @@
         }
       });
     }
+
+    // Prevent accidental whole-window drop navigation
+    window.addEventListener('dragover', (e) => {
+      const m = document.getElementById('csv-import-modal');
+      if (m && !m.classList.contains('hidden')) {
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('drop', (e) => {
+      const m = document.getElementById('csv-import-modal');
+      if (m && !m.classList.contains('hidden')) {
+        e.preventDefault();
+      }
+    });
 
     const masterCheck = document.getElementById('csv-master-check');
     if (masterCheck) {

@@ -171,7 +171,10 @@
                 <span class="material-symbols-rounded">history</span>
                 <h3>直近の明細</h3>
               </div>
-              <button class="text-link-btn" id="home-view-all-tx-btn">すべて見る ›</button>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button type="button" id="home-csv-import-btn" class="tiny-btn" title="クレカ連携・明細取込"><span class="material-symbols-rounded" style="font-size:13px;">credit_card</span> クレカ連携</button>
+                <button class="text-link-btn" id="home-view-all-tx-btn">すべて見る ›</button>
+              </div>
             </div>
             <div class="transaction-items-list" id="home-recent-tx-list">
               <!-- Dynamic Recent Items -->
@@ -192,8 +195,8 @@
             <button id="tx-view-list-btn" class="sub-tab-btn active"><span class="material-symbols-rounded">format_list_bulleted</span> リスト</button>
             <button id="tx-view-cal-btn" class="sub-tab-btn"><span class="material-symbols-rounded">calendar_month</span> カレンダー</button>
           </div>
-          <button type="button" id="open-csv-import-btn" class="secondary-btn-sm" title="クレジットカード明細CSVを取り込み">
-            <span class="material-symbols-rounded">credit_card</span> クレカCSV取込
+          <button type="button" id="open-csv-import-btn" class="secondary-btn-sm primary-tint" title="クレジットカード連携・明細CSV取込">
+            <span class="material-symbols-rounded">credit_card</span> クレカ連携 (CSV)
           </button>
         </div>
 
@@ -393,6 +396,22 @@
           </div>
         </div>
 
+        <!-- Credit Card Integration Quick Action Bar -->
+        <div class="card-integration-banner" style="margin-bottom:16px; background:var(--surface-1); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:12px 16px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:36px; height:36px; border-radius:8px; border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; background:var(--surface-2); color:var(--accent-primary);">
+              <span class="material-symbols-rounded">credit_card</span>
+            </div>
+            <div>
+              <div style="font-size:13px; font-weight:700;">クレジットカード連携</div>
+              <div style="font-size:11px; color:var(--text-muted);">明細CSVをアップロードして一括取込</div>
+            </div>
+          </div>
+          <button type="button" id="assets-csv-import-btn" class="secondary-btn-sm primary-tint">
+            <span class="material-symbols-rounded">cloud_upload</span> クレカ連携
+          </button>
+        </div>
+
         <!-- Asset Trend Line Chart -->
         <div class="chart-card-box">
           <div class="chart-title-row">
@@ -497,7 +516,7 @@
               <strong>クレジットカード明細 (CSV) の取込</strong>
               <p>カード会社（楽天・三井住友・JCB等）の明細CSVを読み込み、自動カテゴリ分類して一括保存します</p>
             </div>
-            <button id="settings-csv-import-btn" class="secondary-btn-sm primary-tint"><span class="material-symbols-rounded">credit_card</span> 明細CSV取込</button>
+            <button id="settings-csv-import-btn" class="secondary-btn-sm primary-tint"><span class="material-symbols-rounded">credit_card</span> クレカ連携</button>
           </div>
 
           <div class="setting-row">
@@ -1047,6 +1066,9 @@
               <input type="file" id="csv-file-input" accept=".csv,text/csv,text/comma-separated-values" style="display:none;" />
               <span class="material-symbols-rounded dropzone-icon">cloud_upload</span>
               <p class="dropzone-text">CSVファイルをドラッグ＆ドロップ<br><span class="dropzone-sub">または クリックしてファイルを選択</span></p>
+              <button type="button" class="secondary-btn-sm" style="margin:4px 0 6px 0; pointer-events:none;">
+                <span class="material-symbols-rounded" style="font-size:16px;">folder_open</span> ファイルを選択
+              </button>
               <div class="dropzone-badge-list">
                 <span class="card-tag">楽天カード</span>
                 <span class="card-tag">三井住友(Vpass)</span>

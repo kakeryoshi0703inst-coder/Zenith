@@ -2,7 +2,7 @@
    Zenith Money - Service Worker (Network First with Offline Fallback)
    ==================================================== */
 
-const CACHE_NAME = 'zenith-money-v17';
+const CACHE_NAME = 'zenith-money-v18';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
