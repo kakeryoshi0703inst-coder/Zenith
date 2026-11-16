@@ -3278,8 +3278,8 @@
       return 'cat_sub';
     }
 
-    // Entertainment / Electronics / Games / Cinema / Books / Online Shopping
-    if (/ビックカメラ|ヨドバシ|ソフマップ|ヤマダ|エディオン|ケーズデンキ|tohoシネマズ|109シネマズ|ユナイテッド・シネマ|映画|ニンテンドー|nintendo|playstation|psn|steam|dmm|カラオケ|ラウンドワン|紀伊國屋|丸善|ジュンク堂|book|tsutaya|amazon|アマゾン/.test(m)) {
+    // Entertainment / Electronics / Games / Cinema / Books / Online Shopping / Computers
+    if (/ビックカメラ|ヨドバシ|ソフマップ|ヤマダ|エディオン|ケーズデンキ|tohoシネマズ|109シネマズ|ユナイテッド・シネマ|映画|ニンテンドー|nintendo|playstation|psn|steam|dmm|カラオケ|ラウンドワン|紀伊國屋|丸善|ジュンク堂|book|tsutaya|amazon|アマゾン|ﾏｳｽ|マウス|パソコン|コンピューター|ｺﾝﾋﾟﾕ-ﾀ|ﾗﾂｺｼｷ|マーケティング/i.test(m)) {
       return 'cat_ent';
     }
 
@@ -3358,8 +3358,173 @@
     });
   }
 
-  // PDF Text Extraction Engine using PDF.js with pure-JS stream fallback
+  // Stream Decompressor (Supporting raw deflate and zlib streams for PDF extraction)
+  async function decompressDeflateStream(streamBytes) {
+    if (!streamBytes || streamBytes.length === 0) return null;
+
+    let rawDeflate = streamBytes;
+    // Strip zlib header (0x78 0x01, 0x78 0x9c, 0x78 0xda) and 4-byte Adler32 checksum
+    if (streamBytes[0] === 0x78 && streamBytes.length > 6) {
+      rawDeflate = streamBytes.slice(2, streamBytes.length - 4);
+    }
+
+    if (typeof DecompressionStream !== 'undefined') {
+      // 1. Try deflate-raw (Supported in Chromium/Edge/Safari/Firefox)
+      try {
+        const ds1 = new DecompressionStream('deflate-raw');
+        const writer1 = ds1.writable.getWriter();
+        writer1.write(rawDeflate);
+        writer1.close();
+        const resp1 = new Response(ds1.readable);
+        const buf1 = await resp1.arrayBuffer();
+        if (buf1 && buf1.byteLength > 0) return new Uint8Array(buf1);
+      } catch (e1) {}
+
+      // 2. Try standard deflate with full zlib bytes
+      try {
+        const ds2 = new DecompressionStream('deflate');
+        const writer2 = ds2.writable.getWriter();
+        writer2.write(streamBytes);
+        writer2.close();
+        const resp2 = new Response(ds2.readable);
+        const buf2 = await resp2.arrayBuffer();
+        if (buf2 && buf2.byteLength > 0) return new Uint8Array(buf2);
+      } catch (e2) {}
+    }
+
+    return null;
+  }
+
+  // Native High-Accuracy PDF Stream & Coordinate Extraction Engine (100% Offline & SVF/Rakuten Card Support)
+  async function extractTextFromPDFNative(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    const latin1Decoder = new TextDecoder('latin1');
+    const rawString = latin1Decoder.decode(bytes);
+
+    const tokens = [];
+    let sIdx = rawString.indexOf('stream');
+
+    while (sIdx !== -1) {
+      let start = sIdx + 6;
+      if (bytes[start] === 13) start++; // \r
+      if (bytes[start] === 10) start++; // \n
+      const end = rawString.indexOf('endstream', start);
+
+      if (end !== -1 && end > start) {
+        const streamBytes = bytes.slice(start, end);
+        const decomp = await decompressDeflateStream(streamBytes);
+
+        if (decomp && decomp.length > 0) {
+          // Japanese Financial PDFs (WingArc1st SVF JavaPrint) use 90ms-RKSJ-H (Shift-JIS)
+          let streamText = '';
+          try {
+            streamText = new TextDecoder('shift-jis').decode(decomp);
+          } catch (e) {
+            try {
+              streamText = new TextDecoder('utf-8').decode(decomp);
+            } catch (e2) {
+              streamText = latin1Decoder.decode(decomp);
+            }
+          }
+
+          // If Shift-JIS has Mojibake replacement characters, verify if UTF-8 is cleaner
+          if (streamText.includes('\uFFFD')) {
+            try {
+              const utf8Candidate = new TextDecoder('utf-8').decode(decomp);
+              if (!utf8Candidate.includes('\uFFFD')) {
+                streamText = utf8Candidate;
+              }
+            } catch (e) {}
+          }
+
+          // Extract SVF JavaPrint text coordinates: X Y Td(string) Tj
+          const svfMatches = streamText.matchAll(/([0-9.-]+)\s+([0-9.-]+)\s+Td\s*\(([^)]*)\)\s*Tj/g);
+          for (const m of svfMatches) {
+            const x = parseFloat(m[1]) || 0;
+            const y = parseFloat(m[2]) || 0;
+            const str = m[3].replace(/\\([()\\])/g, '$1');
+            if (str.trim()) {
+              tokens.push({ x, y, str });
+            }
+          }
+
+          // Extract Standard PDF coordinates: X Y Td/Tm ... (string) Tj
+          if (tokens.length === 0) {
+            const stdMatches = streamText.matchAll(/(?:([0-9.-]+)\s+([0-9.-]+)\s+(?:Td|Tm)[\s\S]*?)?\(([^)]*)\)\s*(?:Tj|'|")/g);
+            for (const m of stdMatches) {
+              const x = m[1] ? parseFloat(m[1]) : 0;
+              const y = m[2] ? parseFloat(m[2]) : 0;
+              const str = m[3].replace(/\\([()\\])/g, '$1');
+              if (str.trim()) {
+                tokens.push({ x, y, str });
+              }
+            }
+          }
+        }
+      }
+      sIdx = rawString.indexOf('stream', start + 1);
+    }
+
+    if (tokens.length === 0) {
+      // Direct raw text fallback if uncompressed
+      const rawMatches = rawString.matchAll(/\(([^)]{2,})\)\s*(?:Tj|'|")/g);
+      const rawLines = [];
+      for (const m of rawMatches) {
+        rawLines.push(m[1].replace(/\\([()\\])/g, '$1'));
+      }
+      return rawLines.join('\n');
+    }
+
+    // Group text tokens by vertical Y position (tolerance of ±8px)
+    const rowsMap = new Map();
+    tokens.forEach(tok => {
+      let matchedY = null;
+      for (const key of rowsMap.keys()) {
+        if (Math.abs(key - tok.y) <= 8) {
+          matchedY = key;
+          break;
+        }
+      }
+      if (matchedY === null) {
+        matchedY = tok.y;
+        rowsMap.set(matchedY, []);
+      }
+      rowsMap.get(matchedY).push(tok);
+    });
+
+    // Sort rows by Y coordinate descending (top of page to bottom)
+    const sortedY = Array.from(rowsMap.keys()).sort((a, b) => b - a);
+    const resultLines = [];
+
+    sortedY.forEach(yKey => {
+      const rowItems = rowsMap.get(yKey);
+      // Sort tokens within the row horizontally by X ascending
+      rowItems.sort((a, b) => a.x - b.x);
+      const rowText = rowItems.map(it => it.str.trim()).filter(Boolean).join(' ');
+      if (rowText) {
+        resultLines.push(rowText);
+      }
+    });
+
+    return resultLines.join('\n');
+  }
+
+  // Unified PDF Text Extractor (Dual-Engine: Native SVF/Shift-JIS + PDF.js)
   async function extractTextFromPDF(arrayBuffer) {
+    // 1. Try Native Stream & Coordinate Extractor First (Guaranteed 100% offline & SVF/Rakuten Card support)
+    try {
+      const nativeText = await extractTextFromPDFNative(arrayBuffer);
+      if (nativeText && nativeText.trim().length > 0) {
+        const testItems = parseCreditCardPDFText(nativeText);
+        if (testItems.length > 0) {
+          return nativeText;
+        }
+      }
+    } catch (nativeErr) {
+      console.warn('Native PDF extract warning, trying PDF.js:', nativeErr);
+    }
+
+    // 2. Fallback to PDF.js if available
     if (typeof window !== 'undefined' && window.pdfjsLib) {
       try {
         const loadingTask = window.pdfjsLib.getDocument({
@@ -3376,13 +3541,12 @@
           const items = textContent.items || [];
           const linesMap = new Map();
 
-          // Cluster text chunks by vertical Y position (transform[5])
           items.forEach(item => {
             if (!item.str || !item.str.trim()) return;
             const y = item.transform ? Math.round(item.transform[5]) : 0;
             let matchedY = null;
             for (const key of linesMap.keys()) {
-              if (Math.abs(key - y) <= 4) {
+              if (Math.abs(key - y) <= 8) {
                 matchedY = key;
                 break;
               }
@@ -3394,23 +3558,17 @@
             linesMap.get(matchedY).push(item);
           });
 
-          // Sort lines by Y descending (PDF page top to bottom)
           const sortedYKeys = Array.from(linesMap.keys()).sort((a, b) => b - a);
-          const pageLines = [];
-
           sortedYKeys.forEach(yKey => {
             const rowItems = linesMap.get(yKey);
-            // Sort items in this row by horizontal X coordinate ascending
             rowItems.sort((a, b) => {
               const ax = a.transform ? a.transform[4] : 0;
               const bx = b.transform ? b.transform[4] : 0;
               return ax - bx;
             });
-            const lineStr = rowItems.map(it => it.str.trim()).filter(Boolean).join('  ');
-            if (lineStr) pageLines.push(lineStr);
+            const lineStr = rowItems.map(it => it.str.trim()).filter(Boolean).join(' ');
+            if (lineStr) fullText += lineStr + '\n';
           });
-
-          fullText += pageLines.join('\n') + '\n';
         }
 
         if (fullText.trim().length > 0) {
@@ -3421,56 +3579,10 @@
       }
     }
 
-    // Direct fallback for raw PDF stream reading
-    return extractTextFromPDFDirect(arrayBuffer);
+    return extractTextFromPDFNative(arrayBuffer);
   }
 
-  // Pure JavaScript Fallback PDF Stream Reader (Offline Resilient)
-  async function extractTextFromPDFDirect(arrayBuffer) {
-    const bytes = new Uint8Array(arrayBuffer);
-    const latin1Decoder = new TextDecoder('latin1');
-    const rawString = latin1Decoder.decode(bytes);
-
-    let extracted = '';
-    // Look for (string) Tj or ' or "
-    const tjRegex = /\(([^)]+)\)\s*(?:Tj|'|")/g;
-    let match;
-    const parts = [];
-    while ((match = tjRegex.exec(rawString)) !== null) {
-      parts.push(match[1]);
-    }
-
-    // Attempt stream decompression via browser DecompressionStream if available
-    if (typeof DecompressionStream !== 'undefined') {
-      let idx = 0;
-      while ((idx = rawString.indexOf('stream', idx)) !== -1) {
-        const start = rawString.indexOf('\n', idx) + 1;
-        const end = rawString.indexOf('endstream', start);
-        if (end !== -1 && end > start) {
-          const streamBytes = bytes.slice(start, end);
-          try {
-            const ds = new DecompressionStream('deflate');
-            const writer = ds.writable.getWriter();
-            writer.write(streamBytes);
-            writer.close();
-            const response = new Response(ds.readable);
-            const decompressedBuf = await response.arrayBuffer();
-            const decoded = new TextDecoder('utf-8', { fatal: false }).decode(decompressedBuf);
-            extracted += decoded + '\n';
-          } catch (e) {
-            // Not a deflate stream or raw uncompressed
-          }
-          idx = end + 9;
-        } else {
-          idx += 6;
-        }
-      }
-    }
-
-    return extracted + '\n' + parts.join('\n') + '\n' + rawString;
-  }
-
-  // Parse Credit Card PDF Extracted Text (Pattern matching for Date + Merchant + Amount)
+  // Parse Credit Card PDF Extracted Text (Rakuten Card, JCB, Vpass, SMBC, Apple, Amazon, etc.)
   function parseCreditCardPDFText(rawText) {
     if (!rawText) return [];
     const rawLines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -3480,87 +3592,95 @@
     const skipDupEl = document.getElementById('csv-skip-duplicates-check');
     const skipDuplicates = skipDupEl ? skipDupEl.checked : true;
 
-    // Filters for noise, headers, footers
-    const headerFilter = /利用明細|カード番号|会員番号|お支払日|支払期日|振替口座|今回ご請求|前月残高|差引合計|合計金額|小計|総計|Page\s*\d+|ページ\s*\d+|お問い合わせ|インフォメーション|ご案内|換算レート|現地通貨|外貨/i;
-
     for (let i = 0; i < rawLines.length; i++) {
       const line = rawLines[i];
-      if (headerFilter.test(line) && !/\d{2,}[円¥￥]|\b\d{1,3}(?:,\d{3})+\b/.test(line)) {
+
+      // 1. Transaction row date check: YYYY/MM/DD, YYYY-MM-DD, YYYY年MM月DD日, R8/08/10
+      const dateMatch = line.match(/(?:20\d{2}[./年-]\d{1,2}[./月-]\d{1,2}(?:日)?|(?:R|令和)\s*\d{1,2}[./年-]\d{1,2}[./月-]\d{1,2}(?:日)?)/i);
+      if (!dateMatch) continue;
+
+      // Skip non-transaction header/meta lines (invoice summary, bank debit info, etc.)
+      if (/口座振替|お支払日|請求確定|ご請求金額|今回ご請求|前月残高|差引合計|合計金額|小計|総計|Page\s*\d+|ページ\s*\d+|会員様相談窓口|様\s*20\d{2}/i.test(line)) {
         continue;
       }
 
-      // 1. Date Detection Pattern: YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD, YYYY年MM月DD日, R8/08/10, YY/MM/DD
-      const dateMatch = line.match(/(?:20\d{2}[./年-]\d{1,2}[./月-]\d{1,2}(?:日)?|(?:R|令和)\s*\d{1,2}[./年-]\d{1,2}[./月-]\d{1,2}(?:日)?|\b\d{2}[./-]\d{1,2}[./-]\d{1,2}\b)/i);
+      const rawDate = dateMatch[0];
+      const date = normalizeDateString(rawDate);
+      let rest = line.replace(rawDate, ' ').trim();
 
-      if (dateMatch) {
-        const rawDate = dateMatch[0];
-        const date = normalizeDateString(rawDate);
-        let rest = line.replace(rawDate, ' ').trim();
-
-        // 2. Amount Detection Pattern: 550円, 10,000円, 918円, ¥10,000, 10,000, 550
-        let amount = 0;
-        let matchedAmountStr = '';
-
-        // Prioritize numbers with currency signs or Yen unit (円, ¥, ￥)
-        const curAmountMatch = rest.match(/([¥￥]\s*[\d]{1,3}(?:,\d{3})+(?:円)?|[\d]{1,3}(?:,\d{3})+(?:円)?|[¥￥]\s*\d+(?:円)?|\b\d{2,7}円\b)/);
-        if (curAmountMatch) {
-          matchedAmountStr = curAmountMatch[0];
-          amount = normalizeAmount(matchedAmountStr);
-          rest = rest.replace(matchedAmountStr, ' ').trim();
-        } else {
-          // Plain numbers with comma or 3+ digits (avoids 1 in 1回払い)
-          const plainAmountMatch = rest.match(/(?:\b|\s)([\d]{1,3}(?:,\d{3})+|\d{3,7})(?:\b|\s)/);
-          if (plainAmountMatch) {
-            matchedAmountStr = plainAmountMatch[1];
-            amount = normalizeAmount(matchedAmountStr);
-            rest = rest.replace(plainAmountMatch[0], ' ').trim();
-          }
+      // 2. Extract Merchant Name
+      // Merchant appears before payment terms (本人, 家族, 利用国, 1回払い, 分割, リボ, ボーナス)
+      let merchant = '';
+      const merchantMatch = rest.match(/^(.*?)(?:\s+(?:利用国|本人|家族|1\s*回払い|分割|リボ|ボーナス|$))/);
+      if (merchantMatch && merchantMatch[1].trim().length >= 2) {
+        merchant = merchantMatch[1].trim();
+      } else {
+        const parts = rest.split(/\s+/);
+        const mParts = [];
+        for (const p of parts) {
+          if (/^[\d,¥￥]+$/.test(p) || /^(本人\*?|家族\*?|1\s*回払い|分割|リボ)$/.test(p)) break;
+          mParts.push(p);
         }
-
-        // Check next line if amount is on consecutive row
-        if (amount <= 0 && i + 1 < rawLines.length) {
-          const nextLine = rawLines[i + 1];
-          const nextAmountMatch = nextLine.match(/([¥￥]?\s*[\d]{1,3}(?:,\d{3})+(?:円)?|[¥￥]\s*\d+(?:円)?|\b\d{2,7}円\b|\b[\d]{1,3}(?:,\d{3})+\b|\b\d{3,7}\b)/);
-          if (nextAmountMatch && !/(?:20\d{2}[./年-]\d{1,2}[./月-]\d{1,2})/i.test(nextLine)) {
-            amount = normalizeAmount(nextAmountMatch[0]);
-            i++;
-          }
-        }
-
-        if (amount <= 0) continue;
-
-        // 3. Merchant Name Cleaning
-        let merchant = rest
-          .replace(/(?:１回払い|1回払い|一括払い|一括|1回|リボ払い|リボ|ボーナス一括|ボーナス|分割\s*\d+回|国内|海外|ショッピング|本人|家族|会員|キャッシング|売上票)/g, '')
-          .replace(/^[0-9\s\-:.]+|[0-9\s\-:.]+$/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        if (!merchant || merchant.length < 2) {
-          if (i > 0 && rawLines[i - 1] && !headerFilter.test(rawLines[i - 1]) && !/\d{4}[./年-]/.test(rawLines[i - 1])) {
-            merchant = rawLines[i - 1].trim();
-          } else {
-            merchant = 'カード利用店舗';
-          }
-        }
-
-        // Automatic Category Classification
-        const categoryId = detectCategoryFromMerchant(merchant);
-
-        // Duplicate Check: Date + Merchant + Amount
-        const isDup = isTransactionDuplicate(date, merchant, amount);
-
-        items.push({
-          id: 'pdf_row_' + i + '_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
-          date,
-          merchant,
-          amount,
-          category_id: categoryId,
-          isDuplicate: isDup,
-          selected: isDup && skipDuplicates ? false : true,
-          source: 'credit_card_pdf'
-        });
+        merchant = mParts.join(' ').trim();
       }
+
+      // Clean merchant string
+      merchant = merchant
+        .replace(/(?:利用国\s*[A-Z]{2}|本人\*?|家族\*?|1\s*回払い|分割\s*\d+\s*回払い|\(\s*\d+\s*回目|ボーナス|リボ|一括)/g, '')
+        .replace(/^[0-9\s\-:.]+|[0-9\s\-:.]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!merchant || merchant.length < 2) {
+        merchant = 'カード利用店舗';
+      }
+
+      // 3. Extract Amount
+      // Strip payment terms and symbols before checking amounts
+      const cleanRest = rest.replace(/(?:利用国\s*[A-Z]{2}|本人\*?|家族\*?|1\s*回払い|分割\s*\d+\s*回払い|\(\s*\d+\s*回目|ボーナス|リボ|一括)/g, ' ');
+
+      const numMatches = Array.from(cleanRest.matchAll(/(?:^|\s)([¥￥]?\s*[\d]{1,3}(?:,\d{3})+|[¥￥]\s*\d+|\b\d{2,7}円?)(?:\s|$)/g));
+      const nonZeroNums = [];
+      for (const nm of numMatches) {
+        const val = normalizeAmount(nm[1]);
+        if (val > 0) nonZeroNums.push(val);
+      }
+
+      let amount = 0;
+      if (rest.includes('分割') || rest.includes('リボ')) {
+        // In Rakuten Card split payments (e.g. Amazon split, notebook marketing, mouse computer):
+        // Columns: [ - ] [ 0 ] [ 支払総額 ] [ 当月請求額 ] [ 当月支払額 ] [ 翌月繰越 ]
+        // The monthly billed amount (当月請求額) is the second to last non-zero number
+        if (nonZeroNums.length >= 2) {
+          amount = nonZeroNums[nonZeroNums.length - 2];
+        } else if (nonZeroNums.length === 1) {
+          amount = nonZeroNums[0];
+        }
+      } else {
+        // In standard 1回払い, the first non-zero number is the transaction amount (100, 3058, 2614, 550, 918, 10000)
+        if (nonZeroNums.length > 0) {
+          amount = nonZeroNums[0];
+        }
+      }
+
+      if (amount <= 0) continue;
+
+      // Automatic Category Classification
+      const categoryId = detectCategoryFromMerchant(merchant);
+
+      // Duplicate Check: Date + Merchant + Amount
+      const isDup = isTransactionDuplicate(date, merchant, amount);
+
+      items.push({
+        id: 'pdf_row_' + i + '_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+        date,
+        merchant,
+        amount,
+        category_id: categoryId,
+        isDuplicate: isDup,
+        selected: isDup && skipDuplicates ? false : true,
+        source: 'credit_card_pdf'
+      });
     }
 
     return items;
@@ -3762,19 +3882,19 @@
     }
   }
 
-  // Sample Credit Card PDF Data (Matching user specification: APPLE COMBILL, AMAZON CO JP, X CORP PAID FEATURE)
+  // Sample Credit Card PDF Data (Matching user statement: 楽天証券, 楽天モバイル, APPLE COM BILL, X CORP, Suica, Amazon, etc.)
   function loadSamplePdfData() {
-    const samplePdfText = `Zenith Card ご利用代金明細書 (PDF)
-カード番号: ****-****-****-8842  ご利用者様: 会員様
-お支払日: 2026年09月10日  ご請求合計金額: 12,708円
-
-利用日       ご利用店名・商品名          利用金額    支払区分
-2026/08/10   APPLE COMBILL               550円       1回払い
-2026/08/10   AMAZON CO JP                10,000円    1回払い
-2026/08/10   X CORP PAID FEATURE         918円       1回払い
-2026/08/15   セブン－イレブン            680円       1回払い
-2026/08/18   スターバックスコーヒー      590円       1回払い
-2026/08/20   マツモトキヨシ              970円       1回払い`;
+    const samplePdfText = `ご利用代金請求明細書
+2026/10/27 口座振替 三井住友銀行 宮崎台支店 普通 ***8589 65ポイント 0円 0円
+2026/09/16 楽天証券投信積立０．５％～ 本人 * 1 回払い 100 0 100 100 100 0
+2026/09/11 楽天モバイル買い替え超トク 本人 * 1 回払い 3,058 0 3,058 3,058 3,058 0
+2026/09/11 楽天モバイル通信料 本人 * 1 回払い 2,614 0 2,614 2,614 2,614 0
+2026/09/10 APPLE COM BILL 本人 * 1 回払い 550 0 550 550 550 0
+2026/09/06 X CORP. PAID FEATURE 利用国 US 本人 * 1 回払い 918 0 918 918 918 0
+2026/09/05 Ｓｕｉｃａチャージ（楽天ペイ） 本人 * 1 回払い 10,000 0 10,000 10,000 10,000 0
+2026/08/04 AMAZON.CO.JP 本人 分割 2 回払い (2 回目 - 0 3,459 1,729 1,729 0
+2025/10/24 ﾗﾂｺｼｷ ﾉ-ﾄﾏ-ｹﾃｲﾝｸﾞ 本人 分割 24 回払い (12 回目 - 40,800 290,800 12,116 12,116 145,392
+2025/07/22 ﾏｳｽｺﾝﾋﾟﾕ-ﾀ- 本人 分割 24 回払い (15 回目 - 52,524 374,364 15,598 15,598 140,382`;
 
     const items = parseCreditCardPDFText(samplePdfText);
     processCardItems(items, 'credit_card_pdf');
