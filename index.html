@@ -22,6 +22,9 @@
   
   <!-- Tesseract.js for High-accuracy Client-side Japanese Receipt OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <!-- PDF.js for High-accuracy Client-side Credit Card Statement PDF Extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   
   <!-- App Stylesheet -->
   <link rel="stylesheet" href="styles.css">
@@ -195,8 +198,8 @@
             <button id="tx-view-list-btn" class="sub-tab-btn active"><span class="material-symbols-rounded">format_list_bulleted</span> リスト</button>
             <button id="tx-view-cal-btn" class="sub-tab-btn"><span class="material-symbols-rounded">calendar_month</span> カレンダー</button>
           </div>
-          <button type="button" id="open-csv-import-btn" class="secondary-btn-sm primary-tint" title="クレジットカード連携・明細CSV取込">
-            <span class="material-symbols-rounded">credit_card</span> クレカ連携 (CSV)
+          <button type="button" id="open-csv-import-btn" class="secondary-btn-sm primary-tint" title="クレジットカード連携・明細(PDF/CSV)取込">
+            <span class="material-symbols-rounded">credit_card</span> クレカ連携 (PDF/CSV)
           </button>
         </div>
 
@@ -513,10 +516,10 @@
           
           <div class="setting-row">
             <div>
-              <strong>クレジットカード明細 (CSV) の取込</strong>
-              <p>カード会社（楽天・三井住友・JCB等）の明細CSVを読み込み、自動カテゴリ分類して一括保存します</p>
+              <strong>クレジットカード明細 (PDF / CSV) の取込</strong>
+              <p>カード会社（楽天・三井住友・JCB・Apple・Amazon等）のPDF明細書またはCSVを読み込み、利用日・店名・金額を自動抽出してデータベースに一括登録します</p>
             </div>
-            <button id="settings-csv-import-btn" class="secondary-btn-sm primary-tint"><span class="material-symbols-rounded">credit_card</span> クレカ連携</button>
+            <button id="settings-csv-import-btn" class="secondary-btn-sm primary-tint"><span class="material-symbols-rounded">credit_card</span> クレカ連携 (PDF/CSV)</button>
           </div>
 
           <div class="setting-row">
@@ -1047,14 +1050,14 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- MODAL 7: CREDIT CARD CSV IMPORT MODAL      -->
+    <!-- MODAL 7: CREDIT CARD PDF / CSV IMPORT MODAL -->
     <!-- ========================================== -->
     <div id="csv-import-modal" class="modal-overlay hidden">
       <div class="modal-card csv-modal-card">
         <div class="modal-header">
           <div class="modal-title-group" style="display:flex; align-items:center; gap:8px;">
             <span class="material-symbols-rounded" style="color:var(--accent-primary);">credit_card</span>
-            <h3>クレジットカード明細 (CSV) 取込</h3>
+            <h3>クレジットカード明細 (PDF / CSV) 取込</h3>
           </div>
           <button id="close-csv-modal-btn" class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
         </div>
@@ -1063,20 +1066,22 @@
           <!-- Step 1: Upload / Dropzone -->
           <div class="csv-upload-section">
             <div id="csv-dropzone" class="csv-dropzone">
-              <input type="file" id="csv-file-input" accept=".csv,text/csv,text/comma-separated-values" style="display:none;" />
+              <input type="file" id="csv-file-input" accept=".pdf,application/pdf,.csv,text/csv,text/comma-separated-values" style="display:none;" />
               <span class="material-symbols-rounded dropzone-icon">cloud_upload</span>
-              <p class="dropzone-text">CSVファイルをドラッグ＆ドロップ<br><span class="dropzone-sub">または クリックしてファイルを選択</span></p>
+              <p class="dropzone-text">PDF または CSVファイルをドラッグ＆ドロップ<br><span class="dropzone-sub">または クリックしてファイルを選択</span></p>
               <button type="button" class="secondary-btn-sm" style="margin:4px 0 6px 0; pointer-events:none;">
-                <span class="material-symbols-rounded" style="font-size:16px;">folder_open</span> ファイルを選択
+                <span class="material-symbols-rounded" style="font-size:16px;">folder_open</span> 明細ファイルを選択
               </button>
               <div class="dropzone-badge-list">
+                <span class="card-tag highlight-tag" style="border-color:var(--accent-primary); color:var(--accent-primary); font-weight:600;">PDF明細書対応</span>
+                <span class="card-tag">CSV明細対応</span>
                 <span class="card-tag">楽天カード</span>
                 <span class="card-tag">三井住友(Vpass)</span>
                 <span class="card-tag">JCB</span>
-                <span class="card-tag">三菱UFJ</span>
-                <span class="card-tag">エポス</span>
-                <span class="card-tag">イオン</span>
-                <span class="card-tag">Shift-JIS / UTF-8 自動判別</span>
+                <span class="card-tag">Apple Card / Pay</span>
+                <span class="card-tag">Amazon Mastercard</span>
+                <span class="card-tag">イオン・エポス・MUFG</span>
+                <span class="card-tag">日付+店名+金額 重複チェック</span>
               </div>
             </div>
 
@@ -1090,13 +1095,24 @@
               </div>
 
               <div class="form-field csv-options-field">
-                <label class="csv-checkbox-label">
-                  <input type="checkbox" id="csv-skip-duplicates-check" checked />
-                  <span>重複明細をスキップ</span>
-                </label>
-                <button type="button" id="load-sample-csv-btn" class="text-link-btn">
-                  <span class="material-symbols-rounded" style="font-size:16px;">experiment</span> サンプル明細で試す
-                </button>
+                <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+                  <label class="csv-checkbox-label">
+                    <input type="checkbox" id="csv-skip-duplicates-check" checked />
+                    <span>重複明細をスキップ</span>
+                  </label>
+                  <label class="csv-checkbox-label">
+                    <input type="checkbox" id="card-auto-save-check" checked />
+                    <span>検出後に自動保存</span>
+                  </label>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:4px;">
+                  <button type="button" id="load-sample-pdf-btn" class="text-link-btn" style="color:var(--accent-primary); font-weight:600;">
+                    <span class="material-symbols-rounded" style="font-size:16px;">picture_as_pdf</span> PDFサンプル明細で試す
+                  </button>
+                  <button type="button" id="load-sample-csv-btn" class="text-link-btn">
+                    <span class="material-symbols-rounded" style="font-size:16px;">table_view</span> CSVサンプルで試す
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1139,8 +1155,8 @@
           <div class="csv-modal-footer">
             <button type="button" id="cancel-csv-import-btn" class="secondary-btn-sm" style="padding:10px 18px;">キャンセル</button>
             <button type="button" id="confirm-csv-import-btn" class="primary-btn-sm" disabled style="padding:10px 22px;">
-              <span class="material-symbols-rounded">download_done</span>
-              <span id="confirm-csv-import-label">明細を取り込む (0件)</span>
+              <span class="material-symbols-rounded">save</span>
+              <span id="confirm-csv-import-label">データベースに保存 (0件)</span>
             </button>
           </div>
         </div>

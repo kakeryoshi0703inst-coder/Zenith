@@ -3230,10 +3230,19 @@
   }
 
   // ==================================================
-  // 8. CREDIT CARD STATEMENT (CSV) IMPORT & DB SYNC
+  // 8. CREDIT CARD STATEMENT (PDF / CSV) IMPORT & DB SYNC
   // ==================================================
 
   let parsedCsvItems = [];
+
+  // Setup PDF.js worker if available in window environment
+  if (typeof window !== 'undefined' && window.pdfjsLib) {
+    try {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    } catch (e) {
+      console.warn('PDF.js worker setup note:', e);
+    }
+  }
 
   function detectCategoryFromMerchant(merchant) {
     if (!merchant) return 'cat_food';
@@ -3264,12 +3273,12 @@
       return 'cat_trans';
     }
 
-    // Subscriptions & Cloud services
-    if (/netflix|ネットフリックス|spotify|スポティファイ|amazon\s*prime|アマゾンプライム|プライム会費|youtube|ユーチューブ|apple\.com|apple\s*services|itunes|icloud|google\s*storage|google\s*one|hulu|disney\+|ディズニープラス|dazn|abema|audible|chatgpt|openai/.test(m)) {
+    // Subscriptions & Cloud services (Apple, Amazon Prime, X Corp, Netflix, etc.)
+    if (/netflix|ネットフリックス|spotify|スポティファイ|amazon\s*prime|アマゾンプライム|プライム会費|youtube|ユーチューブ|apple|itunes|icloud|google\s*storage|google\s*one|hulu|disney\+|ディズニープラス|dazn|abema|audible|chatgpt|openai|x\s*corp|twitter|combill|adobe|notion|github|zoom/i.test(m)) {
       return 'cat_sub';
     }
 
-    // Entertainment / Electronics / Games / Cinema / Books
+    // Entertainment / Electronics / Games / Cinema / Books / Online Shopping
     if (/ビックカメラ|ヨドバシ|ソフマップ|ヤマダ|エディオン|ケーズデンキ|tohoシネマズ|109シネマズ|ユナイテッド・シネマ|映画|ニンテンドー|nintendo|playstation|psn|steam|dmm|カラオケ|ラウンドワン|紀伊國屋|丸善|ジュンク堂|book|tsutaya|amazon|アマゾン/.test(m)) {
       return 'cat_ent';
     }
@@ -3315,12 +3324,246 @@
   }
 
   function normalizeAmount(val) {
-    if (typeof val === 'number') return Math.abs(val);
+    if (typeof val === 'number') return Math.abs(Math.round(val));
     if (!val) return 0;
     let s = String(val).replace(/[¥￥,\s円]/g, '').trim();
     if (s.startsWith('(') && s.endsWith(')')) s = '-' + s.slice(1, -1);
     const n = parseInt(s, 10);
     return isNaN(n) ? 0 : Math.abs(n);
+  }
+
+  // Normalize merchant string for high-accuracy duplicate matching
+  function cleanMerchantForMatch(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+      .toLowerCase()
+      .replace(/[\s\-_・／/.,，、()（）]/g, '');
+  }
+
+  // Duplicate Check: combination of [Date + Merchant + Amount] (日付＋店名＋金額)
+  function isTransactionDuplicate(date, merchant, amount) {
+    const normMerchant = cleanMerchantForMatch(merchant);
+    const numAmount = Math.round(Number(amount) || 0);
+
+    return appState.transactions.some(t => {
+      // 1. Check Date
+      if (t.date !== date) return false;
+      // 2. Check Amount
+      if (Math.round(Number(t.amount) || 0) !== numAmount) return false;
+      // 3. Check Merchant / Store name
+      const tMerchant = cleanMerchantForMatch(t.merchant || t.memo || '');
+      if (!normMerchant || !tMerchant) return true; // same date and amount
+      return tMerchant === normMerchant || tMerchant.includes(normMerchant) || normMerchant.includes(tMerchant);
+    });
+  }
+
+  // PDF Text Extraction Engine using PDF.js with pure-JS stream fallback
+  async function extractTextFromPDF(arrayBuffer) {
+    if (typeof window !== 'undefined' && window.pdfjsLib) {
+      try {
+        const loadingTask = window.pdfjsLib.getDocument({
+          data: arrayBuffer,
+          cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+          cMapPacked: true
+        });
+        const pdf = await loadingTask.promise;
+        let fullText = '';
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent({ normalizeWhitespace: true });
+          const items = textContent.items || [];
+          const linesMap = new Map();
+
+          // Cluster text chunks by vertical Y position (transform[5])
+          items.forEach(item => {
+            if (!item.str || !item.str.trim()) return;
+            const y = item.transform ? Math.round(item.transform[5]) : 0;
+            let matchedY = null;
+            for (const key of linesMap.keys()) {
+              if (Math.abs(key - y) <= 4) {
+                matchedY = key;
+                break;
+              }
+            }
+            if (matchedY === null) {
+              matchedY = y;
+              linesMap.set(matchedY, []);
+            }
+            linesMap.get(matchedY).push(item);
+          });
+
+          // Sort lines by Y descending (PDF page top to bottom)
+          const sortedYKeys = Array.from(linesMap.keys()).sort((a, b) => b - a);
+          const pageLines = [];
+
+          sortedYKeys.forEach(yKey => {
+            const rowItems = linesMap.get(yKey);
+            // Sort items in this row by horizontal X coordinate ascending
+            rowItems.sort((a, b) => {
+              const ax = a.transform ? a.transform[4] : 0;
+              const bx = b.transform ? b.transform[4] : 0;
+              return ax - bx;
+            });
+            const lineStr = rowItems.map(it => it.str.trim()).filter(Boolean).join('  ');
+            if (lineStr) pageLines.push(lineStr);
+          });
+
+          fullText += pageLines.join('\n') + '\n';
+        }
+
+        if (fullText.trim().length > 0) {
+          return fullText;
+        }
+      } catch (pdfErr) {
+        console.warn('PDF.js parser note:', pdfErr);
+      }
+    }
+
+    // Direct fallback for raw PDF stream reading
+    return extractTextFromPDFDirect(arrayBuffer);
+  }
+
+  // Pure JavaScript Fallback PDF Stream Reader (Offline Resilient)
+  async function extractTextFromPDFDirect(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    const latin1Decoder = new TextDecoder('latin1');
+    const rawString = latin1Decoder.decode(bytes);
+
+    let extracted = '';
+    // Look for (string) Tj or ' or "
+    const tjRegex = /\(([^)]+)\)\s*(?:Tj|'|")/g;
+    let match;
+    const parts = [];
+    while ((match = tjRegex.exec(rawString)) !== null) {
+      parts.push(match[1]);
+    }
+
+    // Attempt stream decompression via browser DecompressionStream if available
+    if (typeof DecompressionStream !== 'undefined') {
+      let idx = 0;
+      while ((idx = rawString.indexOf('stream', idx)) !== -1) {
+        const start = rawString.indexOf('\n', idx) + 1;
+        const end = rawString.indexOf('endstream', start);
+        if (end !== -1 && end > start) {
+          const streamBytes = bytes.slice(start, end);
+          try {
+            const ds = new DecompressionStream('deflate');
+            const writer = ds.writable.getWriter();
+            writer.write(streamBytes);
+            writer.close();
+            const response = new Response(ds.readable);
+            const decompressedBuf = await response.arrayBuffer();
+            const decoded = new TextDecoder('utf-8', { fatal: false }).decode(decompressedBuf);
+            extracted += decoded + '\n';
+          } catch (e) {
+            // Not a deflate stream or raw uncompressed
+          }
+          idx = end + 9;
+        } else {
+          idx += 6;
+        }
+      }
+    }
+
+    return extracted + '\n' + parts.join('\n') + '\n' + rawString;
+  }
+
+  // Parse Credit Card PDF Extracted Text (Pattern matching for Date + Merchant + Amount)
+  function parseCreditCardPDFText(rawText) {
+    if (!rawText) return [];
+    const rawLines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (rawLines.length === 0) return [];
+
+    const items = [];
+    const skipDupEl = document.getElementById('csv-skip-duplicates-check');
+    const skipDuplicates = skipDupEl ? skipDupEl.checked : true;
+
+    // Filters for noise, headers, footers
+    const headerFilter = /利用明細|カード番号|会員番号|お支払日|支払期日|振替口座|今回ご請求|前月残高|差引合計|合計金額|小計|総計|Page\s*\d+|ページ\s*\d+|お問い合わせ|インフォメーション|ご案内|換算レート|現地通貨|外貨/i;
+
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      if (headerFilter.test(line) && !/\d{2,}[円¥￥]|\b\d{1,3}(?:,\d{3})+\b/.test(line)) {
+        continue;
+      }
+
+      // 1. Date Detection Pattern: YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD, YYYY年MM月DD日, R8/08/10, YY/MM/DD
+      const dateMatch = line.match(/(?:20\d{2}[./年-]\d{1,2}[./月-]\d{1,2}(?:日)?|(?:R|令和)\s*\d{1,2}[./年-]\d{1,2}[./月-]\d{1,2}(?:日)?|\b\d{2}[./-]\d{1,2}[./-]\d{1,2}\b)/i);
+
+      if (dateMatch) {
+        const rawDate = dateMatch[0];
+        const date = normalizeDateString(rawDate);
+        let rest = line.replace(rawDate, ' ').trim();
+
+        // 2. Amount Detection Pattern: 550円, 10,000円, 918円, ¥10,000, 10,000, 550
+        let amount = 0;
+        let matchedAmountStr = '';
+
+        // Prioritize numbers with currency signs or Yen unit (円, ¥, ￥)
+        const curAmountMatch = rest.match(/([¥￥]\s*[\d]{1,3}(?:,\d{3})+(?:円)?|[\d]{1,3}(?:,\d{3})+(?:円)?|[¥￥]\s*\d+(?:円)?|\b\d{2,7}円\b)/);
+        if (curAmountMatch) {
+          matchedAmountStr = curAmountMatch[0];
+          amount = normalizeAmount(matchedAmountStr);
+          rest = rest.replace(matchedAmountStr, ' ').trim();
+        } else {
+          // Plain numbers with comma or 3+ digits (avoids 1 in 1回払い)
+          const plainAmountMatch = rest.match(/(?:\b|\s)([\d]{1,3}(?:,\d{3})+|\d{3,7})(?:\b|\s)/);
+          if (plainAmountMatch) {
+            matchedAmountStr = plainAmountMatch[1];
+            amount = normalizeAmount(matchedAmountStr);
+            rest = rest.replace(plainAmountMatch[0], ' ').trim();
+          }
+        }
+
+        // Check next line if amount is on consecutive row
+        if (amount <= 0 && i + 1 < rawLines.length) {
+          const nextLine = rawLines[i + 1];
+          const nextAmountMatch = nextLine.match(/([¥￥]?\s*[\d]{1,3}(?:,\d{3})+(?:円)?|[¥￥]\s*\d+(?:円)?|\b\d{2,7}円\b|\b[\d]{1,3}(?:,\d{3})+\b|\b\d{3,7}\b)/);
+          if (nextAmountMatch && !/(?:20\d{2}[./年-]\d{1,2}[./月-]\d{1,2})/i.test(nextLine)) {
+            amount = normalizeAmount(nextAmountMatch[0]);
+            i++;
+          }
+        }
+
+        if (amount <= 0) continue;
+
+        // 3. Merchant Name Cleaning
+        let merchant = rest
+          .replace(/(?:１回払い|1回払い|一括払い|一括|1回|リボ払い|リボ|ボーナス一括|ボーナス|分割\s*\d+回|国内|海外|ショッピング|本人|家族|会員|キャッシング|売上票)/g, '')
+          .replace(/^[0-9\s\-:.]+|[0-9\s\-:.]+$/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (!merchant || merchant.length < 2) {
+          if (i > 0 && rawLines[i - 1] && !headerFilter.test(rawLines[i - 1]) && !/\d{4}[./年-]/.test(rawLines[i - 1])) {
+            merchant = rawLines[i - 1].trim();
+          } else {
+            merchant = 'カード利用店舗';
+          }
+        }
+
+        // Automatic Category Classification
+        const categoryId = detectCategoryFromMerchant(merchant);
+
+        // Duplicate Check: Date + Merchant + Amount
+        const isDup = isTransactionDuplicate(date, merchant, amount);
+
+        items.push({
+          id: 'pdf_row_' + i + '_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+          date,
+          merchant,
+          amount,
+          category_id: categoryId,
+          isDuplicate: isDup,
+          selected: isDup && skipDuplicates ? false : true,
+          source: 'credit_card_pdf'
+        });
+      }
+    }
+
+    return items;
   }
 
   function parseCSVLine(line) {
@@ -3345,18 +3588,6 @@
     }
     row.push(entry.trim());
     return row.map(col => col.replace(/^["']|["']$/g, '').trim());
-  }
-
-  function isTransactionDuplicate(date, merchant, amount) {
-    const normMerchant = (merchant || '').trim().toLowerCase();
-    const numAmount = Math.round(Number(amount) || 0);
-
-    return appState.transactions.some(t => {
-      if (t.date !== date) return false;
-      if (Math.round(Number(t.amount) || 0) !== numAmount) return false;
-      const tMerchant = (t.merchant || t.memo || '').trim().toLowerCase();
-      return tMerchant === normMerchant || tMerchant.includes(normMerchant) || normMerchant.includes(tMerchant);
-    });
   }
 
   function parseCreditCardCSV(csvText) {
@@ -3387,7 +3618,6 @@
         if (cCol === -1 && catKeywords.some(k => lower.includes(k))) cCol = idx;
       });
 
-      // If at least date and amount (or date and merchant) are found, consider this the header row
       if (dCol !== -1 && (aCol !== -1 || mCol !== -1)) {
         headerIndex = i;
         dateCol = dCol;
@@ -3398,14 +3628,12 @@
       }
     }
 
-    // Heuristic fallback if no header found
     const startIndex = headerIndex >= 0 ? headerIndex + 1 : 0;
     if (headerIndex === -1) {
       dateCol = 0;
       merchantCol = 1;
       amountCol = 2;
     } else if (merchantCol === -1) {
-      // Find first column that is neither date nor amount
       merchantCol = [0, 1, 2, 3].find(idx => idx !== dateCol && idx !== amountCol) || 1;
     }
 
@@ -3422,18 +3650,15 @@
       const rawAmount = cols[amountCol] || '';
       const rawCategory = categoryCol !== -1 ? cols[categoryCol] : '';
 
-      // Skip lines with no recognizable date or summary lines
       if (!rawDate || /合計|小計|総計|total|subtotal/i.test(rawMerchant + rawDate)) continue;
 
       const date = normalizeDateString(rawDate);
       const amount = normalizeAmount(rawAmount);
-      if (amount <= 0) continue; // Skip zero or invalid amounts
+      if (amount <= 0) continue;
 
       let merchant = rawMerchant.replace(/[\t\r\n]+/g, ' ').trim();
-      // Remove common prefix noise like VPASS codes or fullwidth spaces
       merchant = merchant.replace(/^[０-９A-Z\s]+(?=[^\s])/i, '').trim() || rawMerchant;
 
-      // Category detection
       let categoryId = 'cat_food';
       if (rawCategory) {
         const found = appState.categories.find(c => c.name === rawCategory.trim());
@@ -3446,13 +3671,14 @@
       const isDup = isTransactionDuplicate(date, merchant, amount);
 
       items.push({
-        id: 'csv_row_' + i + '_' + Date.now().toString(36),
+        id: 'csv_row_' + i + '_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
         date,
         merchant,
         amount,
         category_id: categoryId,
         isDuplicate: isDup,
-        selected: isDup && skipDuplicates ? false : true
+        selected: isDup && skipDuplicates ? false : true,
+        source: 'credit_card_csv'
       });
     }
 
@@ -3497,25 +3723,64 @@
     if (modal) modal.classList.add('hidden');
   }
 
-  function handleCsvFile(file) {
+  // Unified File Handler for both PDF and CSV
+  async function handleIncomingCardFile(file) {
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const buffer = e.target.result;
-      let text = '';
-      try {
-        // Try UTF-8 first (strict fatal mode to catch invalid Shift-JIS sequences)
-        text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-      } catch (err) {
-        // Fallback to Shift-JIS (common in Japanese credit cards)
-        text = new TextDecoder('shift-jis').decode(buffer);
-      }
-      processCsvContent(text);
-    };
-    reader.readAsArrayBuffer(file);
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+
+    if (isPdf) {
+      showToast('PDF明細書を読み込み・テキスト解析中...');
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const buffer = e.target.result;
+        try {
+          const rawText = await extractTextFromPDF(buffer);
+          const items = parseCreditCardPDFText(rawText);
+          processCardItems(items, 'credit_card_pdf');
+        } catch (err) {
+          console.error('PDF Read Error:', err);
+          alert('PDF明細書の読み込み中にエラーが発生しました。ファイル形式をご確認ください。');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // CSV File Handler
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target.result;
+        let text = '';
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+        } catch (err) {
+          text = new TextDecoder('shift-jis').decode(buffer);
+        }
+        const items = parseCreditCardCSV(text);
+        processCardItems(items, 'credit_card_csv');
+      };
+      reader.readAsArrayBuffer(file);
+    }
   }
 
+  // Sample Credit Card PDF Data (Matching user specification: APPLE COMBILL, AMAZON CO JP, X CORP PAID FEATURE)
+  function loadSamplePdfData() {
+    const samplePdfText = `Zenith Card ご利用代金明細書 (PDF)
+カード番号: ****-****-****-8842  ご利用者様: 会員様
+お支払日: 2026年09月10日  ご請求合計金額: 12,708円
+
+利用日       ご利用店名・商品名          利用金額    支払区分
+2026/08/10   APPLE COMBILL               550円       1回払い
+2026/08/10   AMAZON CO JP                10,000円    1回払い
+2026/08/10   X CORP PAID FEATURE         918円       1回払い
+2026/08/15   セブン－イレブン            680円       1回払い
+2026/08/18   スターバックスコーヒー      590円       1回払い
+2026/08/20   マツモトキヨシ              970円       1回払い`;
+
+    const items = parseCreditCardPDFText(samplePdfText);
+    processCardItems(items, 'credit_card_pdf');
+  }
+
+  // Sample Credit Card CSV Data
   function loadSampleCsvData() {
     const sampleCsv = `利用日,利用店名・商品名,利用金額,支払区分
 2026/11/02,セブン－イレブン,748,1回払い
@@ -3529,15 +3794,16 @@
 2026/11/09,ＪＲ東日本 モバイルＳｕｉｃａ,3000,1回払い
 2026/11/09,スシロー,2840,1回払い`;
 
-    processCsvContent(sampleCsv);
-    showToast('サンプル明細(10件)を読み込みました');
+    const items = parseCreditCardCSV(sampleCsv);
+    processCardItems(items, 'credit_card_csv');
   }
 
-  function processCsvContent(csvText) {
-    parsedCsvItems = parseCreditCardCSV(csvText);
+  // Common Processor for Parsed Items (Auto-save + Preview Table)
+  function processCardItems(items, source = 'credit_card_pdf') {
+    parsedCsvItems = items;
 
     if (parsedCsvItems.length === 0) {
-      alert('明細データが見つかりませんでした。CSVファイルの列構成（日付、利用店名、金額）をご確認ください。');
+      alert('明細データが見つかりませんでした。PDFまたはCSVの形式をご確認ください。');
       return;
     }
 
@@ -3545,6 +3811,22 @@
     const previewContainer = document.getElementById('csv-preview-container');
     if (previewContainer) previewContainer.classList.remove('hidden');
     updateConfirmCsvBtn();
+
+    const autoSaveEl = document.getElementById('card-auto-save-check');
+    const autoSave = autoSaveEl ? autoSaveEl.checked : true;
+
+    const selectedItems = parsedCsvItems.filter(it => it.selected);
+    const totalCount = parsedCsvItems.length;
+    const dupCount = parsedCsvItems.filter(it => it.isDuplicate).length;
+
+    if (autoSave && selectedItems.length > 0) {
+      executeCsvImport(true); // Auto-save into database immediately
+      showToast(`${source === 'credit_card_pdf' ? 'PDF' : 'CSV'}から利用明細 ${selectedItems.length}件をデータベースに自動登録しました (重複スキップ: ${dupCount}件)`);
+    } else if (dupCount === totalCount) {
+      showToast(`すべての明細 (${totalCount}件) は既にデータベースに登録済みです (重複スキップ)`);
+    } else {
+      showToast(`${source === 'credit_card_pdf' ? 'PDF' : 'CSV'}から利用明細 ${totalCount}件を検出しました`);
+    }
   }
 
   function renderCsvPreviewTable() {
@@ -3642,7 +3924,7 @@
 
     if (confirmBtn && confirmLabel) {
       confirmBtn.disabled = selectedCount === 0;
-      confirmLabel.textContent = `明細を取り込む (${selectedCount}件)`;
+      confirmLabel.textContent = `データベースに保存 (${selectedCount}件)`;
     }
 
     const masterCheck = document.getElementById('csv-master-check');
@@ -3652,7 +3934,8 @@
     }
   }
 
-  function executeCsvImport() {
+  // Execute Database Registration & Deduplication Sync
+  function executeCsvImport(keepModalOpen = false) {
     const selectedItems = parsedCsvItems.filter(it => it.selected);
     if (selectedItems.length === 0) return;
 
@@ -3671,8 +3954,8 @@
         account_id: targetAccountId,
         merchant: item.merchant,
         memo: item.merchant,
-        tags: ['クレジットカード', 'CSV取込', cardAccountName],
-        source: 'credit_card_csv',
+        tags: ['クレジットカード', item.source === 'credit_card_pdf' ? 'PDF取込' : 'CSV取込', cardAccountName],
+        source: item.source || 'credit_card_pdf',
         user_verified: true,
         card_hash: `${item.date}_${item.merchant}_${item.amount}`,
         created_at: new Date().toISOString()
@@ -3680,12 +3963,21 @@
 
       applyAccountBalanceChange(newTx);
       appState.transactions.unshift(newTx);
+
+      // Once inserted into DB, update state in table to duplicate / unselected
+      item.isDuplicate = true;
+      item.selected = false;
     });
 
     saveStateToStorage();
-    closeCsvImportModal();
     renderApp();
-    showToast(`クレジットカード明細 ${selectedItems.length}件を取り込みました`);
+    renderCsvPreviewTable();
+    updateConfirmCsvBtn();
+
+    if (!keepModalOpen) {
+      closeCsvImportModal();
+      showToast(`クレジットカード明細 ${selectedItems.length}件をデータベースに保存しました`);
+    }
   }
 
   function setupCsvImportEvents() {
@@ -3695,8 +3987,9 @@
     bindClick('home-csv-import-btn', openCsvImportModal);
     bindClick('close-csv-modal-btn', closeCsvImportModal);
     bindClick('cancel-csv-import-btn', closeCsvImportModal);
+    bindClick('load-sample-pdf-btn', loadSamplePdfData);
     bindClick('load-sample-csv-btn', loadSampleCsvData);
-    bindClick('confirm-csv-import-btn', executeCsvImport);
+    bindClick('confirm-csv-import-btn', () => executeCsvImport(false));
 
     const modal = document.getElementById('csv-import-modal');
     if (modal) {
@@ -3724,13 +4017,13 @@
         e.preventDefault();
         dropzone.classList.remove('drag-over');
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-          handleCsvFile(e.dataTransfer.files[0]);
+          handleIncomingCardFile(e.dataTransfer.files[0]);
         }
       });
 
       fileInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files.length > 0) {
-          handleCsvFile(e.target.files[0]);
+          handleIncomingCardFile(e.target.files[0]);
         }
       });
     }
