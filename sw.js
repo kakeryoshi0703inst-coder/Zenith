@@ -2,12 +2,13 @@
    Zenith Money - Service Worker (Network First with Offline Fallback)
    ==================================================== */
 
-const CACHE_NAME = 'zenith-money-v20';
+const CACHE_NAME = 'zenith-money-v21';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './pako_inflate.min.js',
   './manifest.json',
   './icon.svg',
   './icon-app.jpg'

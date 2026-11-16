@@ -3358,18 +3358,36 @@
     });
   }
 
-  // Stream Decompressor (Supporting raw deflate and zlib streams for PDF extraction)
+  // Stream Decompressor (Supporting Pako, Deflate-Raw, and Zlib for 100% Mobile & Offline PDF extraction)
   async function decompressDeflateStream(streamBytes) {
     if (!streamBytes || streamBytes.length === 0) return null;
 
+    // 1. Try Pako first (Bundled locally, 100% offline, works on all Safari iOS / Android / Chrome)
+    if (typeof pako !== 'undefined' && pako.inflate) {
+      try {
+        return pako.inflate(streamBytes);
+      } catch (e) {
+        try {
+          if (streamBytes[0] === 0x78 && streamBytes.length > 6) {
+            return pako.inflateRaw(streamBytes.subarray(2, streamBytes.length - 4));
+          }
+        } catch (e2) {}
+      }
+    }
+
+    if (typeof window !== 'undefined' && window.pako && window.pako.inflate) {
+      try {
+        return window.pako.inflate(streamBytes);
+      } catch (e) {}
+    }
+
+    // 2. Fallback to native DecompressionStream if available
     let rawDeflate = streamBytes;
-    // Strip zlib header (0x78 0x01, 0x78 0x9c, 0x78 0xda) and 4-byte Adler32 checksum
     if (streamBytes[0] === 0x78 && streamBytes.length > 6) {
-      rawDeflate = streamBytes.slice(2, streamBytes.length - 4);
+      rawDeflate = streamBytes.subarray(2, streamBytes.length - 4);
     }
 
     if (typeof DecompressionStream !== 'undefined') {
-      // 1. Try deflate-raw (Supported in Chromium/Edge/Safari/Firefox)
       try {
         const ds1 = new DecompressionStream('deflate-raw');
         const writer1 = ds1.writable.getWriter();
@@ -3380,7 +3398,6 @@
         if (buf1 && buf1.byteLength > 0) return new Uint8Array(buf1);
       } catch (e1) {}
 
-      // 2. Try standard deflate with full zlib bytes
       try {
         const ds2 = new DecompressionStream('deflate');
         const writer2 = ds2.writable.getWriter();
@@ -3395,48 +3412,95 @@
     return null;
   }
 
-  // Native High-Accuracy PDF Stream & Coordinate Extraction Engine (100% Offline & SVF/Rakuten Card Support)
+  // Safe Text Decoder for Decompressed PDF Stream (Safe for iOS Safari, Shift-JIS & UTF-8)
+  function decodeStreamBytes(bytes) {
+    if (!bytes || bytes.length === 0) return '';
+
+    // 1. Try Shift-JIS (Standard for Japanese financial statements e.g. SVF / Rakuten Card)
+    try {
+      const sjis = new TextDecoder('shift-jis');
+      const text = sjis.decode(bytes);
+      if (!text.includes('\uFFFD')) return text;
+    } catch (e) {
+      try {
+        const sjis2 = new TextDecoder('shift_jis');
+        const text2 = sjis2.decode(bytes);
+        if (!text2.includes('\uFFFD')) return text2;
+      } catch (e2) {}
+    }
+
+    // 2. Try UTF-8
+    try {
+      const utf = new TextDecoder('utf-8');
+      const text = utf.decode(bytes);
+      if (!text.includes('\uFFFD')) return text;
+    } catch (e3) {}
+
+    // 3. Fallback character-by-character decoding (Zero-throw guarantee)
+    let s = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      const sub = bytes.subarray(i, Math.min(i + chunk, bytes.length));
+      s += String.fromCharCode.apply(null, sub);
+    }
+    return s;
+  }
+
+  // Find Byte Sequence in Uint8Array (Pure binary matching, zero TextDecoder needed, never throws)
+  function findByteSequence(bytes, seq, startIdx = 0) {
+    const sLen = seq.length;
+    const maxIdx = bytes.length - sLen;
+    for (let i = startIdx; i <= maxIdx; i++) {
+      let match = true;
+      for (let j = 0; j < sLen; j++) {
+        if (bytes[i + j] !== seq[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) return i;
+    }
+    return -1;
+  }
+
+  // Native High-Accuracy PDF Stream & Coordinate Extraction Engine (100% Mobile Safe & Offline)
   async function extractTextFromPDFNative(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
-    const latin1Decoder = new TextDecoder('latin1');
-    const rawString = latin1Decoder.decode(bytes);
-
     const tokens = [];
-    let sIdx = rawString.indexOf('stream');
 
-    while (sIdx !== -1) {
-      let start = sIdx + 6;
-      if (bytes[start] === 13) start++; // \r
-      if (bytes[start] === 10) start++; // \n
-      const end = rawString.indexOf('endstream', start);
+    // Binary sequences: 'stream' = [115, 116, 114, 101, 97, 109], 'endstream' = [101, 110, 100, 115, 116, 114, 101, 97, 109]
+    const streamSeq = [115, 116, 114, 101, 97, 109];
+    const endstreamSeq = [101, 110, 100, 115, 116, 114, 101, 97, 109];
 
-      if (end !== -1 && end > start) {
-        const streamBytes = bytes.slice(start, end);
-        const decomp = await decompressDeflateStream(streamBytes);
+    let idx = 0;
+    while (true) {
+      const s = findByteSequence(bytes, streamSeq, idx);
+      if (s === -1) break;
 
-        if (decomp && decomp.length > 0) {
-          // Japanese Financial PDFs (WingArc1st SVF JavaPrint) use 90ms-RKSJ-H (Shift-JIS)
-          let streamText = '';
-          try {
-            streamText = new TextDecoder('shift-jis').decode(decomp);
-          } catch (e) {
-            try {
-              streamText = new TextDecoder('utf-8').decode(decomp);
-            } catch (e2) {
-              streamText = latin1Decoder.decode(decomp);
-            }
-          }
+      const e = findByteSequence(bytes, endstreamSeq, s + 6);
+      if (e === -1) break;
 
-          // If Shift-JIS has Mojibake replacement characters, verify if UTF-8 is cleaner
-          if (streamText.includes('\uFFFD')) {
-            try {
-              const utf8Candidate = new TextDecoder('utf-8').decode(decomp);
-              if (!utf8Candidate.includes('\uFFFD')) {
-                streamText = utf8Candidate;
-              }
-            } catch (e) {}
-          }
+      let dataStart = s + 6;
+      if (bytes[dataStart] === 13) dataStart++; // \r
+      if (bytes[dataStart] === 10) dataStart++; // \n
 
+      let dataEnd = e;
+      if (bytes[dataEnd - 1] === 10) dataEnd--; // \n
+      if (bytes[dataEnd - 1] === 13) dataEnd--; // \r
+
+      if (dataEnd > dataStart) {
+        const streamBytes = bytes.subarray(dataStart, dataEnd);
+        let decomp = null;
+        try {
+          decomp = await decompressDeflateStream(streamBytes);
+        } catch (decompErr) {
+          console.warn('Decomp error on stream:', decompErr);
+        }
+
+        const targetBytes = (decomp && decomp.length > 0) ? decomp : streamBytes;
+        const streamText = decodeStreamBytes(targetBytes);
+
+        if (streamText) {
           // Extract SVF JavaPrint text coordinates: X Y Td(string) Tj
           const svfMatches = streamText.matchAll(/([0-9.-]+)\s+([0-9.-]+)\s+Td\s*\(([^)]*)\)\s*Tj/g);
           for (const m of svfMatches) {
@@ -3462,17 +3526,12 @@
           }
         }
       }
-      sIdx = rawString.indexOf('stream', start + 1);
+
+      idx = e + 9;
     }
 
     if (tokens.length === 0) {
-      // Direct raw text fallback if uncompressed
-      const rawMatches = rawString.matchAll(/\(([^)]{2,})\)\s*(?:Tj|'|")/g);
-      const rawLines = [];
-      for (const m of rawMatches) {
-        rawLines.push(m[1].replace(/\\([()\\])/g, '$1'));
-      }
-      return rawLines.join('\n');
+      return '';
     }
 
     // Group text tokens by vertical Y position (tolerance of ±8px)
@@ -3498,7 +3557,6 @@
 
     sortedY.forEach(yKey => {
       const rowItems = rowsMap.get(yKey);
-      // Sort tokens within the row horizontally by X ascending
       rowItems.sort((a, b) => a.x - b.x);
       const rowText = rowItems.map(it => it.str.trim()).filter(Boolean).join(' ');
       if (rowText) {
@@ -3509,9 +3567,9 @@
     return resultLines.join('\n');
   }
 
-  // Unified PDF Text Extractor (Dual-Engine: Native SVF/Shift-JIS + PDF.js)
+  // Unified PDF Text Extractor (Dual-Engine: Native SVF/Shift-JIS + PDF.js, Never Throws)
   async function extractTextFromPDF(arrayBuffer) {
-    // 1. Try Native Stream & Coordinate Extractor First (Guaranteed 100% offline & SVF/Rakuten Card support)
+    // 1. Try Native Stream & Coordinate Extractor First (Fast, 100% offline, pako-powered)
     try {
       const nativeText = await extractTextFromPDFNative(arrayBuffer);
       if (nativeText && nativeText.trim().length > 0) {
@@ -3579,7 +3637,13 @@
       }
     }
 
-    return extractTextFromPDFNative(arrayBuffer);
+    // 3. Ultimate Fallback
+    try {
+      return await extractTextFromPDFNative(arrayBuffer);
+    } catch (finalErr) {
+      console.error('All PDF extraction attempts failed:', finalErr);
+      return '';
+    }
   }
 
   // Parse Credit Card PDF Extracted Text (Rakuten Card, JCB, Vpass, SMBC, Apple, Amazon, etc.)
@@ -3853,30 +3917,43 @@
       showToast('PDF明細書を読み込み・テキスト解析中...');
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const buffer = e.target.result;
         try {
+          const buffer = e.target.result;
           const rawText = await extractTextFromPDF(buffer);
           const items = parseCreditCardPDFText(rawText);
           processCardItems(items, 'credit_card_pdf');
         } catch (err) {
           console.error('PDF Read Error:', err);
-          alert('PDF明細書の読み込み中にエラーが発生しました。ファイル形式をご確認ください。');
+          alert('PDF明細書の読み込み中にエラーが発生しました。\n' + (err && err.message ? err.message : 'ファイル形式をご確認ください。'));
         }
+      };
+      reader.onerror = (e) => {
+        console.error('FileReader error:', e);
+        alert('ファイルの読み込みに失敗しました。');
       };
       reader.readAsArrayBuffer(file);
     } else {
       // CSV File Handler
       const reader = new FileReader();
       reader.onload = (e) => {
-        const buffer = e.target.result;
-        let text = '';
         try {
-          text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+          const buffer = e.target.result;
+          let text = '';
+          try {
+            text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+          } catch (err) {
+            text = new TextDecoder('shift-jis').decode(buffer);
+          }
+          const items = parseCreditCardCSV(text);
+          processCardItems(items, 'credit_card_csv');
         } catch (err) {
-          text = new TextDecoder('shift-jis').decode(buffer);
+          console.error('CSV Read Error:', err);
+          alert('CSV明細書の読み込み中にエラーが発生しました。\n' + (err && err.message ? err.message : ''));
         }
-        const items = parseCreditCardCSV(text);
-        processCardItems(items, 'credit_card_csv');
+      };
+      reader.onerror = (e) => {
+        console.error('FileReader error:', e);
+        alert('ファイルの読み込みに失敗しました。');
       };
       reader.readAsArrayBuffer(file);
     }
